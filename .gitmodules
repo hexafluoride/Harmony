@@ -1,3 +1,4 @@
 [submodule "Chordette"]
 	path = Chordette
 	url = https://github.com/hexafluoride/Chordette
+	branch = master
