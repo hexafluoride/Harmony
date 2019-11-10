@@ -3,7 +3,12 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp2.2</TargetFramework>
+    <LangVersion>7.1</LangVersion>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MessagePack" Version="1.8.74" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Chordette\Chordette\Chordette.csproj" />
