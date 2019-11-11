@@ -11,6 +11,8 @@ namespace Harmony
 {
     public class HarmonyNode : Node
     {
+        public new HarmonyNetwork Peers { get => base.Peers as HarmonyNetwork; set => base.Peers = value; }
+
         public JoinBlock JoinBlock { get; set; }
         public EphemeralJoinBlock EphemeralJoinBlock { get; set; }
 
@@ -20,9 +22,13 @@ namespace Harmony
         public bool Running { get; set; }
         private ManualResetEvent RunningSemaphore = new ManualResetEvent(false);
 
+        public HarmonyNode(IPEndPoint listen_ep) :
+            this(listen_ep.Address, listen_ep.Port)
+        { }
+
         public HarmonyNode(IPAddress listen_addr, int port, DataStore store = default) : base()
         {
-            JoinBlock = new JoinBlock() { Address = listen_addr, Port = (ushort)port };
+            JoinBlock = new JoinBlock(listen_addr, (ushort)port);
             ID = JoinBlock.GenerateID();
 
             LocalDataStore = LocalDataStore ?? new DataStore();
@@ -58,6 +64,35 @@ namespace Harmony
                 (peer.Value as RemoteNode).Disconnect(false);
         }
 
+        protected override void ListenerLoop()
+        {
+            while (true)
+            {
+                var incoming_socket = Listener.AcceptSocket();
+
+                try
+                {
+                    Log($"Incoming connection on {Listener.LocalEndpoint} from {incoming_socket.RemoteEndPoint}");
+                    var remote_node = new HarmonyRemoteNode(this, incoming_socket);
+                    remote_node.Start();
+                    Log($"Connected to {remote_node.ID.ToUsefulString()} on {incoming_socket.RemoteEndPoint}");
+
+                    Peers.Add(remote_node);
+                }
+                catch (Exception ex)
+                {
+                    Log($"{ex.GetType()} occurred while trying to accept connection: {ex.Message}");
+
+                    try
+                    {
+                        incoming_socket.Close();
+                        incoming_socket.Dispose();
+                    }
+                    catch { }
+                }
+            }
+        }
+
         private void StabilizerLoop()
         {
             while (!RunningSemaphore.WaitOne()) ; // wait until we start running
@@ -78,13 +113,28 @@ namespace Harmony
         {
             Log($"Connecting to {ep}...");
 
-            var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
-            socket.Connect(ep);
+            try
+            {
+                var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
+                socket.Connect(ep);
 
-            var remote_node = new HarmonyRemoteNode(this, socket);
-            remote_node.Start();
+                var remote_node = new HarmonyRemoteNode(this, socket);
+                remote_node.Start();
 
-            return remote_node;
+                if (remote_node.Disconnected)
+                    return null;
+
+                return remote_node;
+            }
+            catch (Exception ex)
+            {
+                return null;
+            }
+        }
+
+        internal void DropPiece(Piece piece)
+        {
+            LocalDataStore.Drop(piece.ID);
         }
 
         internal (Piece, byte[]) RetrievePieceLocally(byte[] id)
@@ -121,16 +171,16 @@ namespace Harmony
                 var iterated_hash = HashSingleton.ComputeRounds(id, i);
 
                 var successor = FindSuccessor(iterated_hash);
-                if (successor == null || successor.Length == 0)
+                if (successor == null || successor.Length == 0 || successor.SequenceEqual(ID))
                     continue;
 
                 var peer = Peers[successor] as HarmonyRemoteNode;
-                var data = peer.Retrieve(iterated_hash);
+                var piece = peer.Retrieve(iterated_hash);
 
-                if (!HashSingleton.VerifyRounds(data, iterated_hash, i))
+                if (piece == null || 
+                    !(HashSingleton.VerifyRounds(piece.Data, piece.ID, (int)piece.RedundancyIndex) && piece.OriginalID.SequenceEqual(id)))
                     continue;
-
-                var piece = new Piece(data, i);
+                
                 return (LocalDataStore[iterated_hash] = piece).Data;
             }
 
@@ -140,15 +190,14 @@ namespace Harmony
 
         public IEnumerable<byte[]> StorePiece(byte[] piece)
         {
+            LocalDataStore.Store(new Piece(piece, 1));
             int d = 5; // redundancy factor, store d copies of this piece
-            var base_id = HashSingleton.Compute(piece);
 
-            for (uint i = 0; i < d; i++)
+            for (uint i = 1; i < d; i++)
             {
-                var iterated_hash = HashSingleton.ComputeRounds(base_id, i);
+                var iterated_hash = HashSingleton.ComputeRounds(piece, i);
 
                 // store locally first
-                LocalDataStore.Store(piece, iterated_hash, i);
 
                 var successor = FindSuccessor(iterated_hash);
 
@@ -156,7 +205,7 @@ namespace Harmony
                     continue;
                 
                 var peer = Peers[successor] as HarmonyRemoteNode;
-                var response = peer.Store(iterated_hash, piece);
+                var response = peer.Store(new Piece(piece, iterated_hash, i));
 
                 if (response != null && response.Key.SequenceEqual(iterated_hash))
                     yield return iterated_hash;

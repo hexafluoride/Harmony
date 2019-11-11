@@ -42,6 +42,19 @@ namespace Harmony
         public IPAddress Address { get; set; }
         public ushort Port { get; set; }
 
+        public JoinBlock() { }
+
+        public JoinBlock(IPEndPoint ep) :
+            this(ep.Address, (ushort)ep.Port)
+        {
+        }
+
+        public JoinBlock(IPAddress addr, ushort port)
+        {
+            Address = addr;
+            Port = port;
+        }
+
         public bool Verify(byte[] id)
         {
             return GenerateID().SequenceEqual(id);
@@ -72,7 +85,7 @@ namespace Harmony
             var addr = new IPAddress(ip_bytes);
             var port = BitConverter.ToUInt16(port_bytes, 0);
 
-            var block = new JoinBlock() { Address = addr, Port = port };
+            var block = new JoinBlock(addr, port);
 
             if (!block.Verify(id))
                 return null;

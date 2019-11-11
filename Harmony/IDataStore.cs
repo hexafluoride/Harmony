@@ -9,5 +9,6 @@ namespace Harmony
         Piece this[byte[] key] { get; set; }
         void Store(Piece piece);
         bool ContainsKey(byte[] key);
+        void Drop(byte[] key);
     }
 }

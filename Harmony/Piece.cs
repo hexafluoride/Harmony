@@ -45,9 +45,11 @@ namespace Harmony
         [Key(2)]
         public uint RedundancyIndex { get; set; }
 
+        public PieceResponse() { }
+
         public PieceResponse(byte[] data)
         {
-            Successful = data == null;
+            Successful = data != null;
             Data = data;
         }
 
@@ -67,12 +69,17 @@ namespace Harmony
         [Key(2)]
         public byte[] Data { get; set; }
 
-        public PieceStorageRequest(byte[] id, int rounds, byte[] data)
+        public PieceStorageRequest() { }
+
+        public PieceStorageRequest(byte[] original_id, int rounds, byte[] data)
         {
-            OriginalID = id;
+            OriginalID = original_id;
             RedundancyIndex = (uint)rounds;
             Data = data;
         }
+
+        public static PieceStorageRequest FromPiece(Piece piece) =>
+            new PieceStorageRequest(piece.OriginalID, (int)piece.RedundancyIndex, piece.Data);
     }
 
     [MessagePackObject]
@@ -80,7 +87,9 @@ namespace Harmony
     {
         [Key(0)]
         public byte[] Key { get; set; }
-        
+
+        public PieceStorageResponse() { }
+
         public PieceStorageResponse(bool successful, byte[] key = default)
         {
             Key = successful ? key : null;

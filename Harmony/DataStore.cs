@@ -16,6 +16,8 @@ namespace Harmony
         public void Store(Piece piece) => this[piece.ID] = piece;
         public void Store(byte[] data, byte[] id, uint rounds) => Store(new Piece(data, id, rounds));
 
+        public void Drop(byte[] key) => Pieces.Remove(key);
+
         public DataStore() { }
     }
 }

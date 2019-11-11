@@ -47,21 +47,23 @@ namespace Harmony
             });
         }
 
-        public T Request<T>(string method, byte[] parameter = default) => LZ4MessagePackSerializer.Deserialize<T>(Request(method, parameter));
-        public T Request<T, TParam>(string method, TParam parameter) => LZ4MessagePackSerializer.Deserialize<T>(Request(method, LZ4MessagePackSerializer.Serialize(parameter)));
-        public T Request<T>(string method, object parameter) => LZ4MessagePackSerializer.Deserialize<T>(Request(method, LZ4MessagePackSerializer.Serialize(parameter)));
+        public T Request<T>(string method, byte[] parameter = default) => DeserializeSoft<T>(base.Request(method, parameter));
+        public T Request<T, TParam>(string method, TParam parameter) => DeserializeSoft<T>(base.Request(method, LZ4MessagePackSerializer.Serialize(parameter)));
+        public T Request<T>(string method, object parameter) => DeserializeSoft<T>(base.Request(method, LZ4MessagePackSerializer.Serialize(parameter)));
 
         public (byte[], T) RequestWithBinary<T>(string method, byte[] parameter = default)
         {
             var reply = Request(method, parameter);
-            return (reply, LZ4MessagePackSerializer.Deserialize<T>(reply));
+            return (reply, DeserializeSoft<T>(reply));
         }
 
-        public void Invoke<T>(string method, T parameter) => Invoke(method, LZ4MessagePackSerializer.Serialize(parameter));
-        public void Invoke(string method, object parameter) => Invoke(method, LZ4MessagePackSerializer.Serialize(parameter));
+        public void Invoke<T>(string method, T parameter) => base.Invoke(method, LZ4MessagePackSerializer.Serialize(parameter));
+        public void Invoke(string method, object parameter) => base.Invoke(method, LZ4MessagePackSerializer.Serialize(parameter));
 
-        public void Reply<T>(byte[] request_id, T parameter) => Reply(request_id, LZ4MessagePackSerializer.Serialize(parameter));
-        public void Reply(byte[] request_id, object parameter) => Reply(request_id, LZ4MessagePackSerializer.Serialize(parameter));
+        public void Reply<T>(byte[] request_id, T parameter) => base.Reply(request_id, LZ4MessagePackSerializer.Serialize(parameter));
+        public void Reply(byte[] request_id, object parameter) => base.Reply(request_id, LZ4MessagePackSerializer.Serialize(parameter));
+
+        private T DeserializeSoft<T>(byte[] arr) => arr == null || arr.Length == 0 ? default : LZ4MessagePackSerializer.Deserialize<T>(arr);
 
         public new void Start()
         {
@@ -70,16 +72,16 @@ namespace Harmony
             EphemeralPeerJoinBlock = Request<EphemeralJoinBlock>("get_ephemeral_join_block");
         }
 
-        public byte[] Retrieve(byte[] key)
+        public Piece Retrieve(byte[] key)
         {
             var reply = Request<PieceResponse>("get_piece", key);
 
             if (!reply.Successful)
                 return null;
 
-            return reply.Data;
+            return new Piece(reply.Data, reply.RedundancyIndex);
         }
 
-        public PieceStorageResponse Store(byte[] key, byte[] data) => Request<PieceStorageResponse>("store_piece", data);
+        public PieceStorageResponse Store(Piece piece) => Request<PieceStorageResponse>("store_piece", PieceStorageRequest.FromPiece(piece));
     }
 }

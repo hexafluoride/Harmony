@@ -14,13 +14,19 @@ namespace Harmony
 
         public HarmonyNetwork(Node self) : base(self, HashSingleton.Hash.HashSize)
         {
+            Self = self as HarmonyNode;
         }
 
-        public new INode Connect(byte[] id)
+        internal new void Add(INode node) => base.Add(node);
+
+        public override INode Connect(byte[] id)
         {
             var join_block = JoinBlock.FromID(id);
             var endpoint = new IPEndPoint(join_block.Address, join_block.Port);
             var node = Self.Connect(endpoint);
+
+            if (node == null)
+                return null;
 
             node.DisconnectEvent += HandleNodeDisconnect;
 
