@@ -156,7 +156,7 @@ namespace Harmony
                     Log.Warn($"Couldn't retrieve piece {key.ToUsefulString()}");
                 }
                 else
-                    Log.Info($"Successfully retrieve piece {key.ToUsefulString()}");
+                    Log.Info($"Successfully retrieved piece {key.ToUsefulString()}");
             }
 
             Thread.Sleep(-1);
