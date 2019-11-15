@@ -170,18 +170,22 @@ namespace Harmony
             {
                 var iterated_hash = HashSingleton.ComputeRounds(id, i);
 
-                var successor = FindSuccessor(iterated_hash);
-                if (successor == null || successor.Length == 0 || successor.SequenceEqual(ID))
-                    continue;
+                try
+                {
+                    var successor = FindSuccessor(iterated_hash);
+                    if (successor == null || successor.Length == 0 || successor.SequenceEqual(ID))
+                        continue;
 
-                var peer = Peers[successor] as HarmonyRemoteNode;
-                var piece = peer.Retrieve(iterated_hash);
+                    var peer = Peers[successor] as HarmonyRemoteNode;
+                    var piece = peer.Retrieve(iterated_hash);
 
-                if (piece == null || 
-                    !(HashSingleton.VerifyRounds(piece.Data, piece.ID, (int)piece.RedundancyIndex) && piece.OriginalID.SequenceEqual(id)))
-                    continue;
-                
-                return (LocalDataStore[iterated_hash] = piece).Data;
+                    if (piece == null ||
+                        !(HashSingleton.VerifyRounds(piece.Data, piece.ID, (int)piece.RedundancyIndex) && piece.OriginalID.SequenceEqual(id)))
+                        continue;
+
+                    return (LocalDataStore[iterated_hash] = piece).Data;
+                }
+                catch (Exception ex) { Log($"Exception while retrieving piece: {ex}"); }
             }
 
             // we failed
