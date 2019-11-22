@@ -17,6 +17,9 @@ namespace Harmony
         public static byte[] ComputeRounds(byte[] data, uint rounds = 1) => ComputeRounds(data, (int)rounds);
         public static byte[] ComputeRounds(byte[] data, int rounds = 1)
         {
+            if (rounds < 1)
+                throw new InvalidOperationException($"Cannot hash a blob 0 or less times (requested rounds: {rounds})");
+
             for (int i = 0; i < rounds; i++)
                 data = Compute(data);
 
