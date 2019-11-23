@@ -31,10 +31,7 @@ namespace Harmony
 
             if (node == null)
             {
-                if (!UnreachableNodes.ContainsKey(id))
-                    UnreachableNodes[id] = 0;
-
-                UnreachableNodes[id]++;
+                MarkUnreachable(id);
                 return null;
             }
 
