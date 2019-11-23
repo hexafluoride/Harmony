@@ -23,6 +23,8 @@ namespace Harmony
         public bool Running { get; set; }
         private ManualResetEvent RunningSemaphore = new ManualResetEvent(false);
 
+        public bool Stable => Peers.IsReachable(Successor) && Peers.IsReachable(Predecessor);
+
         public HarmonyNode(IPEndPoint listen_ep) :
             this(listen_ep.Address, listen_ep.Port)
         {

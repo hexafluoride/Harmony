@@ -19,6 +19,7 @@ namespace Harmony
     {
         static Logger Log = LogManager.GetCurrentClassLogger();
         static HarmonyNode Node { get; set; }
+        static IPEndPoint ListenEP { get; set; }
         static Random Random = new Random();
 
         static void Main(string[] args)
@@ -72,6 +73,7 @@ namespace Harmony
                 listen_ep = new IPEndPoint(IPAddress.Loopback, 30000 + Random.Next(1000));
             }
 
+            ListenEP = listen_ep;
             Log.Info($"Listening on {listen_ep}");
 
             // initialize network parameters
@@ -187,25 +189,32 @@ namespace Harmony
         {
             lock (stat_sw)
             {
-                var actual_time = stat_sw.ElapsedMilliseconds - last_stat_calc_time; // time since last stat calculation, we shouldn't assume 1000 for accuracy
-                last_stat_calc_time = stat_sw.ElapsedMilliseconds;
+                try
+                {
+                    var actual_time = stat_sw.ElapsedMilliseconds - last_stat_calc_time; // time since last stat calculation, we shouldn't assume 1000 for accuracy
+                    last_stat_calc_time = stat_sw.ElapsedMilliseconds;
 
-                var message_count = RemoteNode.SentMessages + RemoteNode.ReceivedMessages;
-                var delta_msg = message_count - last_message_count;
-                last_message_count = message_count;
-                message_rate = (long)(delta_msg / (actual_time / 1000d)); // correcting for if a heartbeat takes longer than the stat calc. cycle period
+                    var message_count = RemoteNode.SentMessages + RemoteNode.ReceivedMessages;
+                    var delta_msg = message_count - last_message_count;
+                    last_message_count = message_count;
+                    message_rate = (long)(delta_msg / (actual_time / 1000d)); // correcting for if a heartbeat takes longer than the stat calc. cycle period
 
-                var delta_bytes = RemoteNode.SentBytes - last_bytes;
-                last_bytes = RemoteNode.SentBytes;
-                data_rate = (long)(delta_bytes / (actual_time / 1000d));
+                    var delta_bytes = RemoteNode.SentBytes - last_bytes;
+                    last_bytes = RemoteNode.SentBytes;
+                    data_rate = (long)(delta_bytes / (actual_time / 1000d));
 
-                Console.Title = $"id: {Node.ID.ToUsefulString(true)}, " +
-                    $"{Node.Peers.Nodes.Count - 1} connections, " +
-                   $"{message_rate:N0} msg/s, " +
-                   $"{data_rate:N0} byte/s, " +
-                   $"predecessor: {Node.Predecessor.ToUsefulString(true)}, " +
-                   $"successor: {Node.Successor.ToUsefulString(true)}, " +
-                   $"keys in memory: {Node.LocalDataStore.Pieces.Count}";
+                    Console.Title = $"{ListenEP}, " +
+                        $"{(Node.Stable ? "stable" : "not stable")}, " +
+                        $"id: {Node.ID.ToUsefulString(true)}, " +
+                        $"{Node.Peers.Nodes.Count - 1} connections, " +
+                       $"{message_rate:N0} msg/s, " +
+                       $"{data_rate:N0} byte/s, " +
+                       $"predecessor: {Node.Predecessor.ToUsefulString(true)}, " +
+                       $"successor: {Node.Successor.ToUsefulString(true)}, " +
+                       $"keys in memory: {Node.LocalDataStore.Pieces.Count}";
+                }
+                catch
+                { }
             }
         }
     }
