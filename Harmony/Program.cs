@@ -78,12 +78,13 @@ namespace Harmony
             HashSingleton.Hash = SHA256.Create();
             Node = new HarmonyNode(listen_ep);
 
+            // configure title display
             Node.PredecessorChanged += (e, s) => { UpdateDisplay(); };
             Node.SuccessorChanged += (e, s) => { UpdateDisplay(); };
-
-            Node.Start();
-
             Task.Run(() => { while (true) { UpdateDisplay(); Thread.Sleep(1000); } }).ConfigureAwait(false);
+
+            // start node
+            Node.Start();
             Log.Info($"Started node, our ID is {Node.ID.ToUsefulString()}");
 
             // join network
@@ -142,7 +143,6 @@ namespace Harmony
 
                 foreach (var id in stored_piece_ids)
                 {
-                    //(var stored_piece, _) = node.RetrievePieceLocally(id);
                     Log.Debug($"Stored {random_piece_data.Length}-byte " +
                         $"random block with original ID {key.ToUsefulString()} in " +
                         $"{id.ToUsefulString()}");
@@ -204,7 +204,8 @@ namespace Harmony
                    $"{message_rate:N0} msg/s, " +
                    $"{data_rate:N0} byte/s, " +
                    $"predecessor: {Node.Predecessor.ToUsefulString(true)}, " +
-                   $"successor: {Node.Successor.ToUsefulString(true)}";
+                   $"successor: {Node.Successor.ToUsefulString(true)}, " +
+                   $"keys in memory: {Node.LocalDataStore.Pieces.Count}";
             }
         }
     }
