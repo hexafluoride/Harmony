@@ -149,7 +149,7 @@ namespace Harmony
             {
                 if (piece.ID.IsNotIn(start, end))
                     continue;
-
+                
                 var response = target.Store(piece, true);
 
                 if (response != null && HashSingleton.VerifyRounds(piece.Data, response.Key, (int)piece.RedundancyIndex))
@@ -178,6 +178,8 @@ namespace Harmony
 
                     Log($"Incoming connection on {Listener.LocalEndpoint} from {incoming_socket.RemoteEndPoint}");
                     var remote_node = new HarmonyRemoteNode(this, incoming_socket);
+
+                    remote_node.DisconnectEvent += HandleNodeDisconnection;
                     remote_node.Start();
                     Log($"Connected to {remote_node.ID.ToUsefulString()} on {incoming_socket.RemoteEndPoint}");
 
@@ -193,6 +195,24 @@ namespace Harmony
                         incoming_socket.Dispose();
                     }
                     catch { }
+                }
+            }
+        }
+
+        private void HandleNodeDisconnection(object sender, RemoteNodeDisconnectingEventArgs e)
+        {
+            var node = sender as HarmonyRemoteNode;
+
+            if (e.LongTerm)
+            {
+                if (node.ID.SequenceEqual(Successor))
+                {
+                    Stabilize(); // immediately try to find a new successor
+                    Notify(Successor); // notify our new successor of our existence
+                }
+                else if (node.ID.SequenceEqual(Predecessor))
+                {
+                    // TODO: find a new predecessor somehow
                 }
             }
         }
