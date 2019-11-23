@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
 using System.Threading;
+using System.Threading.Tasks;
 using Chordette;
 using MessagePack.Resolvers;
 using Mono.Options;
@@ -16,6 +18,8 @@ namespace Harmony
     class Program
     {
         static Logger Log = LogManager.GetCurrentClassLogger();
+        static HarmonyNode Node { get; set; }
+        static Random Random = new Random();
 
         static void Main(string[] args)
         {
@@ -65,17 +69,23 @@ namespace Harmony
                 if (listen_arg.Any())
                     Log.Warn($"Invalid argument passed to --listen: \"{listen_arg}\" is not a parsable IP endpoint. Try something in the form of 127.0.0.1:30001.");
 
-                listen_ep = new IPEndPoint(IPAddress.Loopback, 30000 + Node.Random.Next(1000));
+                listen_ep = new IPEndPoint(IPAddress.Loopback, 30000 + Random.Next(1000));
             }
 
             Log.Info($"Listening on {listen_ep}");
 
             // initialize network parameters
             HashSingleton.Hash = SHA256.Create();
-            var node = new HarmonyNode(listen_ep);
-            node.Start();
+            Node = new HarmonyNode(listen_ep);
 
-            Log.Info($"Started node, our ID is {node.ID.ToUsefulString()}");
+            // configure title display
+            Node.PredecessorChanged += (e, s) => { UpdateDisplay(); };
+            Node.SuccessorChanged += (e, s) => { UpdateDisplay(); };
+            Task.Run(() => { while (true) { UpdateDisplay(); Thread.Sleep(1000); } }).ConfigureAwait(false);
+
+            // start node
+            Node.Start();
+            Log.Info($"Started node, our ID is {Node.ID.ToUsefulString()}");
 
             // join network
             if (bootstrap_list.Any())
@@ -89,12 +99,12 @@ namespace Harmony
                     if (bootstrap_node.Length == (HashSingleton.Hash.HashSize / 4)) // if bootstrap_node is an ID
                     {
                         var bootstrap_id = Utilities.ParseBytesFromString(bootstrap_node);
-                        bootstrap_result = node.Join(bootstrap_id);
+                        bootstrap_result = Node.Join(bootstrap_id);
                     }
                     else if (Utilities.TryParseIPEndPoint(bootstrap_node, out IPEndPoint bootstrap_ep))
                     {
                         var join_block = new JoinBlock(bootstrap_ep);
-                        bootstrap_result = node.Join(join_block.GenerateID());
+                        bootstrap_result = Node.Join(join_block.GenerateID());
                     }
                     else
                     {
@@ -113,7 +123,7 @@ namespace Harmony
             else
             {
                 Log.Warn($"No bootstrap nodes specified, we're alone. You can form an actual network by passing either " +
-                    $"{node.ID.ToUsefulString()} or {listen_ep} to another Harmony instance.");
+                    $"{Node.ID.ToUsefulString()} or {listen_ep} to another Harmony instance.");
             }
 
             Console.ReadLine();
@@ -124,22 +134,21 @@ namespace Harmony
             for (int i = 0; i < 3; i++)
             {
                 var random_piece_data = new byte[512];
-                Node.Random.NextBytes(random_piece_data);
+                Random.NextBytes(random_piece_data);
 
                 var key = HashSingleton.Compute(random_piece_data);
 
                 test_piece_keys.Add(key);
-                var stored_piece_ids = node.StorePiece(random_piece_data);
+                var stored_piece_ids = Node.StorePiece(random_piece_data);
 
                 foreach (var id in stored_piece_ids)
                 {
-                    //(var stored_piece, _) = node.RetrievePieceLocally(id);
                     Log.Debug($"Stored {random_piece_data.Length}-byte " +
                         $"random block with original ID {key.ToUsefulString()} in " +
                         $"{id.ToUsefulString()}");
                 }
 
-                node.LocalDataStore.Drop(key);
+                Node.LocalDataStore.Drop(key);
 
                 Thread.Sleep(500);
             }
@@ -149,7 +158,7 @@ namespace Harmony
             // retrieve test pieces
             foreach (var key in test_piece_keys)
             {
-                var piece = node.RetrievePiece(key);
+                var piece = Node.RetrievePiece(key);
 
                 if (piece == null || piece == default)
                 {
@@ -159,7 +168,45 @@ namespace Harmony
                     Log.Info($"Successfully retrieved piece {key.ToUsefulString()}");
             }
 
-            Thread.Sleep(-1);
+            Console.ReadLine();
+
+            Node.Shutdown();
+
+            Console.ReadLine();
+        }
+
+        static readonly Stopwatch stat_sw = Stopwatch.StartNew();
+
+        static long last_message_count = 0;
+        static long last_bytes = 0;
+        static long last_stat_calc_time = 0; // milliseconds since message rate last calc.
+        static long message_rate = 0;
+        static long data_rate = 0;
+
+        private static void UpdateDisplay()
+        {
+            lock (stat_sw)
+            {
+                var actual_time = stat_sw.ElapsedMilliseconds - last_stat_calc_time; // time since last stat calculation, we shouldn't assume 1000 for accuracy
+                last_stat_calc_time = stat_sw.ElapsedMilliseconds;
+
+                var message_count = RemoteNode.SentMessages + RemoteNode.ReceivedMessages;
+                var delta_msg = message_count - last_message_count;
+                last_message_count = message_count;
+                message_rate = (long)(delta_msg / (actual_time / 1000d)); // correcting for if a heartbeat takes longer than the stat calc. cycle period
+
+                var delta_bytes = RemoteNode.SentBytes - last_bytes;
+                last_bytes = RemoteNode.SentBytes;
+                data_rate = (long)(delta_bytes / (actual_time / 1000d));
+
+                Console.Title = $"id: {Node.ID.ToUsefulString(true)}, " +
+                    $"{Node.Peers.Nodes.Count - 1} connections, " +
+                   $"{message_rate:N0} msg/s, " +
+                   $"{data_rate:N0} byte/s, " +
+                   $"predecessor: {Node.Predecessor.ToUsefulString(true)}, " +
+                   $"successor: {Node.Successor.ToUsefulString(true)}, " +
+                   $"keys in memory: {Node.LocalDataStore.Pieces.Count}";
+            }
         }
     }
 }

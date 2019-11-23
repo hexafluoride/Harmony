@@ -22,11 +22,18 @@ namespace Harmony
         public override INode Connect(byte[] id)
         {
             var join_block = JoinBlock.FromID(id);
+
+            if (join_block == null)
+                return null;
+
             var endpoint = new IPEndPoint(join_block.Address, join_block.Port);
-            var node = Self.Connect(endpoint);
+            var node = Self.Connect(endpoint) as HarmonyRemoteNode;
 
             if (node == null)
+            {
+                MarkUnreachable(id);
                 return null;
+            }
 
             node.DisconnectEvent += HandleNodeDisconnect;
 

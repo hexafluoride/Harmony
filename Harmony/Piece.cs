@@ -54,14 +54,14 @@ namespace Harmony
         }
 
         public static PieceResponse FromPiece(Piece piece) =>
-            new PieceResponse(piece.Data) { RedundancyIndex = piece.RedundancyIndex };
+            new PieceResponse(piece?.Data) { RedundancyIndex = piece?.RedundancyIndex ?? 0 };
     }
 
     [MessagePackObject]
     public class PieceStorageRequest
     {
         [Key(0)]
-        public byte[] OriginalID { get; set; }
+        public byte[] ID { get; set; }
 
         [Key(1)]
         public uint RedundancyIndex { get; set; }
@@ -69,17 +69,22 @@ namespace Harmony
         [Key(2)]
         public byte[] Data { get; set; }
 
+        [Key(3)]
+        public bool HandoffRequest { get; set; }
+
         public PieceStorageRequest() { }
 
-        public PieceStorageRequest(byte[] original_id, int rounds, byte[] data)
+        public PieceStorageRequest(byte[] id, int rounds, byte[] data, bool handoff_request = false)
         {
-            OriginalID = original_id;
+            ID = id;
             RedundancyIndex = (uint)rounds;
             Data = data;
+
+            HandoffRequest = handoff_request;
         }
 
-        public static PieceStorageRequest FromPiece(Piece piece) =>
-            new PieceStorageRequest(piece.OriginalID, (int)piece.RedundancyIndex, piece.Data);
+        public static PieceStorageRequest FromPiece(Piece piece, bool handoff = false) =>
+            new PieceStorageRequest(piece.ID, (int)piece.RedundancyIndex, piece.Data, handoff);
     }
 
     [MessagePackObject]

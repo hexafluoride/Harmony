@@ -21,8 +21,8 @@ namespace Harmony
             AddMessageHandler("get_ephemeral_join_block", (s, e) => { Reply(e.RequestID, SelfNode.EphemeralJoinBlock); });
             AddMessageHandler("get_piece", (s, e) =>
             {
-                (_, var local_piece) = SelfNode.RetrievePieceLocally(e.Parameter);
-                var piece_response = new PieceResponse(local_piece);
+                (var local_piece, _) = SelfNode.RetrievePieceLocally(e.Parameter);
+                var piece_response = PieceResponse.FromPiece(local_piece);
 
                 Reply(e.RequestID, piece_response);
             });
@@ -34,13 +34,18 @@ namespace Harmony
                 // constraints
 
                 var request = LZ4MessagePackSerializer.Deserialize<PieceStorageRequest>(e.Parameter);
+                Log($"received piece storage request from {ID.ToUsefulString(true)} (piece_id={request.ID.ToUsefulString(true)}, d={request.RedundancyIndex})");
+
                 var iterated_hash = HashSingleton.ComputeRounds(request.Data, request.RedundancyIndex);
 
-                if (!HashSingleton.Verify(request.Data, request.OriginalID))
+                if (!HashSingleton.VerifyRounds(request.Data, request.ID, (int)request.RedundancyIndex))
                 {
+                    Log($"piece storage request from {ID.ToUsefulString(true)} (piece_id={request.ID.ToUsefulString(true)}, d={request.RedundancyIndex}) FAILED verification");
                     Reply(e.RequestID, new PieceStorageResponse(false));
                     return;
                 }
+
+                Log($"piece storage request from {ID.ToUsefulString(true)} (piece_id={request.ID.ToUsefulString(true)}, d={request.RedundancyIndex}) PASSED verification");
 
                 SelfNode.LocalDataStore.Store(new Piece(request.Data, request.RedundancyIndex));
                 Reply(e.RequestID, new PieceStorageResponse(true, iterated_hash));
@@ -82,6 +87,6 @@ namespace Harmony
             return new Piece(reply.Data, reply.RedundancyIndex);
         }
 
-        public PieceStorageResponse Store(Piece piece) => Request<PieceStorageResponse>("store_piece", PieceStorageRequest.FromPiece(piece));
+        public PieceStorageResponse Store(Piece piece, bool handoff = false) => Request<PieceStorageResponse>("store_piece", PieceStorageRequest.FromPiece(piece, handoff));
     }
 }

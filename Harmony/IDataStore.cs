@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Harmony
 {
-    interface IDataStore
+    interface IDataStore : IEnumerable<Piece>
     {
         Piece this[byte[] key] { get; set; }
         void Store(Piece piece);

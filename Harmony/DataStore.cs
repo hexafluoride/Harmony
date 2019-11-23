@@ -18,6 +18,16 @@ namespace Harmony
 
         public void Drop(byte[] key) => Pieces.Remove(key);
 
+        public IEnumerator<Piece> GetEnumerator()
+        {
+            return Pieces.Values.GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
+        }
+
         public DataStore() { }
     }
 }
