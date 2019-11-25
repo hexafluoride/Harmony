@@ -12,7 +12,7 @@ namespace Harmony
 {
     public class HarmonyNode : Node
     {
-        public new HarmonyNetwork Peers { get => base.Peers as HarmonyNetwork; set => base.Peers = value; }
+        public new HarmonyNetwork Network { get => base.Network as HarmonyNetwork; set => base.Network = value; }
         
         public JoinBlock JoinBlock { get; set; }
         public EphemeralJoinBlock EphemeralJoinBlock { get; set; }
@@ -23,7 +23,7 @@ namespace Harmony
         public bool Running { get; set; }
         private ManualResetEvent RunningSemaphore = new ManualResetEvent(false);
 
-        public bool Stable => Peers.IsReachable(Successor) && Peers.IsReachable(Predecessor);
+        public bool Stable => Network.IsReachable(Successor) && Network.IsReachable(Predecessor);
 
         public HarmonyNode(IPEndPoint listen_ep) :
             this(listen_ep.Address, listen_ep.Port)
@@ -38,7 +38,7 @@ namespace Harmony
             LocalDataStore = LocalDataStore ?? new DataStore();
 
             Listener = new TcpListener(listen_addr, port);
-            Peers = new HarmonyNetwork(this);
+            Network = new HarmonyNetwork(this);
 
             Table = new FingerTable(HashSingleton.Hash.HashSize, this);
             Successor = Table[0].ID;
@@ -72,7 +72,7 @@ namespace Harmony
             else
             {
                 // connect to successor
-                var uncasted_successor = Peers[successor_id];
+                var uncasted_successor = Network[successor_id];
 
                 while (uncasted_successor == null || !(uncasted_successor is HarmonyRemoteNode))
                 {
@@ -109,7 +109,7 @@ namespace Harmony
             Running = false;
 
             // stop node
-            foreach (var peer in Peers.Nodes)
+            foreach (var peer in Network.Nodes)
                 if (peer.Value is RemoteNode)
                     (peer.Value as RemoteNode).Disconnect(false);
         }
@@ -117,7 +117,7 @@ namespace Harmony
         private IEnumerable<Piece> HandoffRange(byte[] target, byte[] start = default, byte[] end = default)
         {
             Log($"Asked to handoff key range {start.ToUsefulString(true)}:{end.ToUsefulString(true)} to node {target.ToUsefulString(true)}");
-            var target_peer = Peers[target];
+            var target_peer = Network[target];
 
             if (target_peer == null)
             {
@@ -136,8 +136,8 @@ namespace Harmony
 
         private IEnumerable<Piece> HandoffRange(HarmonyRemoteNode target, byte[] start = default, byte[] end = default)
         {
-            start = start ?? new byte[Peers.M / 8];
-            end = end ?? new byte[Peers.M / 8];
+            start = start ?? new byte[KeySize];
+            end = end ?? new byte[KeySize];
 
             if (target == null)
             {
@@ -185,7 +185,7 @@ namespace Harmony
                     remote_node.Start();
                     Log($"Connected to {remote_node.ID.ToUsefulString()} on {incoming_socket.RemoteEndPoint}");
 
-                    Peers.Add(remote_node);
+                    Network.Add(remote_node);
                 }
                 catch (Exception ex)
                 {
@@ -225,7 +225,7 @@ namespace Harmony
 
             while (RunningSemaphore.WaitOne(0))
             {
-                if (Peers.Nodes.Count > 1)
+                if (Network.PeerCount > 0)
                 {
                     Stabilize();
                     FixFingers();
@@ -281,15 +281,15 @@ namespace Harmony
             }
         }
 
-        public byte[] RetrievePiece(byte[] id)
+        public Piece RetrievePiece(byte[] id)
         {
             int d = 5;
 
             // try to find the piece in our internal cache
-            (_, byte[] locally_retrieved) = RetrievePieceLocally(id);
+            (var piece, byte[] locally_retrieved) = RetrievePieceLocally(id);
 
             if (locally_retrieved != null)
-                return locally_retrieved;
+                return piece;
 
             // by this point, we know that the data isn't cached locally
             for (int i = 0; i < d; i++)
@@ -302,14 +302,14 @@ namespace Harmony
                     if (successor == null || successor.Length == 0 || successor.SequenceEqual(ID))
                         continue;
 
-                    var peer = Peers[successor] as HarmonyRemoteNode;
-                    var piece = peer.Retrieve(iterated_hash);
+                    var peer = Network[successor] as HarmonyRemoteNode;
+                    piece = peer.Retrieve(iterated_hash);
 
                     if (piece == null ||
                         !(HashSingleton.VerifyRounds(piece.Data, piece.ID, (int)piece.RedundancyIndex) && piece.OriginalID.SequenceEqual(id)))
                         continue;
 
-                    return (LocalDataStore[iterated_hash] = piece).Data;
+                    return (LocalDataStore[iterated_hash] = piece);
                 }
                 catch (Exception ex) { Log($"Exception while retrieving piece: {ex}"); }
             }
@@ -334,8 +334,8 @@ namespace Harmony
                 if (successor == null || successor.Length == 0 || successor.SequenceEqual(ID))
                     continue;
                 
-                var peer = Peers[successor] as HarmonyRemoteNode;
-                var response = peer?.Store(new Piece(piece, iterated_hash, i));
+                var peer = Network[successor] as HarmonyRemoteNode;
+                var response = peer?.Store(new Piece(piece, iterated_hash, i) { Source = ID });
 
                 if (response != null && response.Key.SequenceEqual(iterated_hash))
                     yield return iterated_hash;
