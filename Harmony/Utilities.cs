@@ -8,6 +8,12 @@ namespace Harmony
 {
     public static class Utilities
     {
+        public static bool TryParseBytesFromString(string str, out byte[] arr)
+        {
+            try { arr = ParseBytesFromString(str); return true; }
+            catch { arr = default; return false; }
+        }
+
         public static byte[] ParseBytesFromString(string str)
         {
             byte[] data = new byte[str.Length / 2];

@@ -6,9 +6,15 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
+
 using Chordette;
+
 using MessagePack.Resolvers;
+
 using Mono.Options;
+
+using Nancy.Hosting.Self;
+
 using NLog;
 using NLog.Config;
 using NLog.Targets;
@@ -43,18 +49,23 @@ namespace Harmony
             // create option set for command line argument parsing
             var bootstrap_list = new List<string>();
             var listen_arg = "";
+            var api_listen_arg = "";
+            bool test_mode = false;
 
             OptionSet set = null;
             set = new OptionSet()
             {
                 {"b|bootstrap=", "A comma-separated list of Harmony IDs or IP endpoints. (can be mixed)", b => bootstrap_list.AddRange(b.Split(',')) },
-                {"l|listen=", "Starts listening on the given IP endpoint. If only an integer is specified, treat the argument as 127.0.0.1:<port>.", l => listen_arg = l }
+                {"l|listen=", "Starts listening for Harmony connections on the given IP endpoint. If only an integer is specified, treat the argument as 127.0.0.1:<port>.", l => listen_arg = l },
+                {"api=", "Starts listening for HTTP requests on the given IP endpoint. Implements the Harmony REST API.", l => api_listen_arg = l },
+                {"test", "Starts an interactive test session after boot.", t => test_mode = true }
             };
 
             var cli_leftovers = set.Parse(args);
 
             // interpret command line arguments
             IPEndPoint listen_ep = new IPEndPoint(IPAddress.None, 0);
+            IPEndPoint api_listen_ep = new IPEndPoint(IPAddress.None, 0);
             
             if (ushort.TryParse(listen_arg, out ushort listen_port))
             {
@@ -63,6 +74,15 @@ namespace Harmony
             else if (Utilities.TryParseIPEndPoint(listen_arg, out IPEndPoint temp_ep))
             {
                 listen_ep = temp_ep;
+            }
+
+            if (ushort.TryParse(api_listen_arg, out ushort api_listen_port))
+            {
+                api_listen_ep = new IPEndPoint(IPAddress.Loopback, api_listen_port);
+            }
+            else if (Utilities.TryParseIPEndPoint(api_listen_arg, out IPEndPoint temp_ep))
+            {
+                api_listen_ep = temp_ep;
             }
 
             if (listen_ep.Address == IPAddress.None && listen_ep.Port == 0)
@@ -74,11 +94,23 @@ namespace Harmony
             }
 
             ListenEP = listen_ep;
-            Log.Info($"Listening on {listen_ep}");
+            Log.Info($"Listening for Harmony connections on {listen_ep}");
+
+            // start HTTP server if needed
+            if (api_listen_ep.Port != 0)
+            {
+                Log.Info($"Listening for HTTP requests on {api_listen_ep}");
+                
+                var host = new NancyHost(new Uri($"http://{api_listen_ep.Address}:{api_listen_ep.Port}/"));
+                host.Start();
+
+                Log.Info("Started API server");
+            }
 
             // initialize network parameters
             HashSingleton.Hash = SHA256.Create();
             Node = new HarmonyNode(listen_ep);
+            HarmonyModule.Node = Node; // Nancy module for the HTTP API
 
             // configure title display
             Node.PredecessorChanged += (e, s) => { UpdateDisplay(); };
@@ -126,48 +158,53 @@ namespace Harmony
             {
                 Log.Warn($"No bootstrap nodes specified, we're alone. You can form an actual network by passing either " +
                     $"{Node.ID.ToUsefulString()} or {listen_ep} to another Harmony instance.");
+
+                Node.Join(default);
             }
 
-            Console.ReadLine();
-
-            List<byte[]> test_piece_keys = new List<byte[]>();
-
-            // store some test pieces
-            for (int i = 0; i < 3; i++)
+            if (test_mode)
             {
-                var random_piece_data = new byte[512];
-                Random.NextBytes(random_piece_data);
+                Console.ReadLine();
 
-                var key = HashSingleton.Compute(random_piece_data);
+                List<byte[]> test_piece_keys = new List<byte[]>();
 
-                test_piece_keys.Add(key);
-                var stored_piece_ids = Node.StorePiece(random_piece_data);
-
-                foreach (var id in stored_piece_ids)
+                // store some test pieces
+                for (int i = 0; i < 3; i++)
                 {
-                    Log.Debug($"Stored {random_piece_data.Length}-byte " +
-                        $"random block with original ID {key.ToUsefulString()} in " +
-                        $"{id.ToUsefulString()}");
+                    var random_piece_data = new byte[512];
+                    Random.NextBytes(random_piece_data);
+
+                    var key = HashSingleton.Compute(random_piece_data);
+
+                    test_piece_keys.Add(key);
+                    var stored_piece_ids = Node.StorePiece(random_piece_data);
+
+                    foreach (var id in stored_piece_ids)
+                    {
+                        Log.Debug($"Stored {random_piece_data.Length}-byte " +
+                            $"random block with original ID {key.ToUsefulString()} in " +
+                            $"{id.ToUsefulString()}");
+                    }
+
+                    Node.LocalDataStore.Drop(key);
+
+                    Thread.Sleep(500);
                 }
 
-                Node.LocalDataStore.Drop(key);
+                Console.ReadLine();
 
-                Thread.Sleep(500);
-            }
-
-            Console.ReadLine();
-
-            // retrieve test pieces
-            foreach (var key in test_piece_keys)
-            {
-                var piece = Node.RetrievePiece(key);
-
-                if (piece == null || piece == default)
+                // retrieve test pieces
+                foreach (var key in test_piece_keys)
                 {
-                    Log.Warn($"Couldn't retrieve piece {key.ToUsefulString()}");
+                    var piece = Node.RetrievePiece(key);
+
+                    if (piece == null || piece == default)
+                    {
+                        Log.Warn($"Couldn't retrieve piece {key.ToUsefulString()}");
+                    }
+                    else
+                        Log.Info($"Successfully retrieved piece {key.ToUsefulString()}");
                 }
-                else
-                    Log.Info($"Successfully retrieved piece {key.ToUsefulString()}");
             }
 
             Console.ReadLine();
@@ -206,7 +243,7 @@ namespace Harmony
                     Console.Title = $"{ListenEP}, " +
                         $"{(Node.Stable ? "stable" : "not stable")}, " +
                         $"id: {Node.ID.ToUsefulString(true)}, " +
-                        $"{Node.Peers.Nodes.Count - 1} connections, " +
+                        $"{Node.Network.PeerCount} connections, " +
                        $"{message_rate:N0} msg/s, " +
                        $"{data_rate:N0} byte/s, " +
                        $"predecessor: {Node.Predecessor.ToUsefulString(true)}, " +
