@@ -47,7 +47,7 @@ namespace Harmony
 
                 Log($"piece storage request from {ID.ToUsefulString(true)} (piece_id={request.ID.ToUsefulString(true)}, d={request.RedundancyIndex}) PASSED verification");
 
-                SelfNode.LocalDataStore.Store(new Piece(request.Data, request.RedundancyIndex));
+                SelfNode.LocalDataStore.Store(new Piece(request.Data, request.RedundancyIndex) { Source = ID });
                 Reply(e.RequestID, new PieceStorageResponse(true, iterated_hash));
             });
         }
@@ -84,7 +84,7 @@ namespace Harmony
             if (!reply.Successful)
                 return null;
 
-            return new Piece(reply.Data, reply.RedundancyIndex);
+            return new Piece(reply.Data, reply.RedundancyIndex) { Source = ID };
         }
 
         public PieceStorageResponse Store(Piece piece, bool handoff = false) => Request<PieceStorageResponse>("store_piece", PieceStorageRequest.FromPiece(piece, handoff));

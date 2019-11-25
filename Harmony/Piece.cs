@@ -12,6 +12,8 @@ namespace Harmony
         public byte[] ID { get; set; }
         public byte[] Data { get; set; }
 
+        public byte[] Source { get; set; }
+
         internal Piece(byte[] data, byte[] id, uint rounds)
         {
             Data = data;
