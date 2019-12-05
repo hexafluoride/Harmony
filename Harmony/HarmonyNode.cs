@@ -39,6 +39,7 @@ namespace Harmony
 
             Listener = new TcpListener(listen_addr, port);
             Network = new HarmonyNetwork(this);
+            KeySize = Network.KeySize;
 
             Table = new FingerTable(HashSingleton.Hash.HashSize, this);
             Successor = Table[0].ID;
@@ -154,7 +155,7 @@ namespace Harmony
                 
                 var response = target.Store(piece, true);
 
-                if (response != null && HashSingleton.VerifyRounds(piece.Data, response.Key, (int)piece.RedundancyIndex))
+                if (response != null && piece.ID.SequenceEqual(response.Key))
                 {
                     Log($"Successfully handed off {piece.ID.ToUsefulString()}");
                     yield return piece;
@@ -210,7 +211,8 @@ namespace Harmony
                 if (node.ID.SequenceEqual(Successor))
                 {
                     Stabilize(); // immediately try to find a new successor
-                    Notify(Successor); // notify our new successor of our existence
+                    NotifyForwards(ID); // notify our new successor of our existence
+                    //NotifyBackwards(ID); // notify our new predecessor of our existence
                 }
                 else if (node.ID.SequenceEqual(Predecessor))
                 {
@@ -337,7 +339,7 @@ namespace Harmony
                 var peer = Network[successor] as HarmonyRemoteNode;
                 var response = peer?.Store(new Piece(piece, iterated_hash, i) { Source = ID });
 
-                if (response != null && response.Key.SequenceEqual(iterated_hash))
+                if (response?.Key != null && response.Key.SequenceEqual(iterated_hash))
                     yield return iterated_hash;
             }
         }
