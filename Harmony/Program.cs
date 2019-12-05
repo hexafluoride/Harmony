@@ -46,6 +46,9 @@ namespace Harmony
             // register IPAddressResolver for the serializer to work
             CompositeResolver.RegisterAndSetAsDefault(IPAddressResolver.Instance, StandardResolver.Instance);
 
+            // create data store
+            var data_store = new DataStore();
+
             // create option set for command line argument parsing
             var bootstrap_list = new List<string>();
             var listen_arg = "";
@@ -58,7 +61,8 @@ namespace Harmony
                 {"b|bootstrap=", "A comma-separated list of Harmony IDs or IP endpoints. (can be mixed)", b => bootstrap_list.AddRange(b.Split(',')) },
                 {"l|listen=", "Starts listening for Harmony connections on the given IP endpoint. If only an integer is specified, treat the argument as 127.0.0.1:<port>.", l => listen_arg = l },
                 {"api=", "Starts listening for HTTP requests on the given IP endpoint. Implements the Harmony REST API.", l => api_listen_arg = l },
-                {"test", "Starts an interactive test session after boot.", t => test_mode = true }
+                {"test", "Starts an interactive test session after boot.", t => test_mode = true },
+                {"c|cache=", "Instructs Harmony to read cached pieces from the given cache directory.", c => data_store.CachePath = c }
             };
 
             var cli_leftovers = set.Parse(args);
@@ -110,6 +114,8 @@ namespace Harmony
             // initialize network parameters
             HashSingleton.Hash = SHA256.Create();
             Node = new HarmonyNode(listen_ep);
+            Node.LocalDataStore = data_store;
+
             HarmonyModule.Node = Node; // Nancy module for the HTTP API
 
             // configure title display
@@ -120,6 +126,7 @@ namespace Harmony
             // start node
             Node.Start();
             Log.Info($"Started node, our ID is {Node.ID.ToUsefulString()}");
+            Log.Info($"Piece cache is located at {Node.LocalDataStore.CachePath}");
 
             // join network
             if (bootstrap_list.Any())
