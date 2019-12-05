@@ -11,10 +11,9 @@ using System.Threading.Tasks;
 using Chordette;
 
 using MessagePack.Resolvers;
-
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Logging;
 using Mono.Options;
-
-using Nancy.Hosting.Self;
 
 using NLog;
 using NLog.Config;
@@ -107,9 +106,16 @@ namespace Harmony
             if (api_listen_ep.Port != 0)
             {
                 Log.Info($"Listening for HTTP requests on {api_listen_ep}");
-                
-                var host = new NancyHost(new Uri($"http://{api_listen_ep.Address}:{api_listen_ep.Port}/"));
-                host.Start();
+
+                var host = new WebHostBuilder()
+                    .UseUrls($"http://{api_listen_ep}/")
+                    .UseKestrel()
+                    .ConfigureLogging((logging) => { logging.ClearProviders(); })
+                    .SuppressStatusMessages(true)
+                    .UseStartup<Startup>()
+                    .Build();
+
+                host.RunAsync();
 
                 Log.Info("Started API server");
             }
