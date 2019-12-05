@@ -33,22 +33,31 @@ namespace Harmony
                 // i.e. don't store a piece if it would violate our storage
                 // constraints
 
-                var request = LZ4MessagePackSerializer.Deserialize<PieceStorageRequest>(e.Parameter);
-                Log($"received piece storage request from {ID.ToUsefulString(true)} (piece_id={request.ID.ToUsefulString(true)}, d={request.RedundancyIndex})");
-
-                var iterated_hash = HashSingleton.ComputeRounds(request.Data, request.RedundancyIndex);
-
-                if (!HashSingleton.VerifyRounds(request.Data, request.ID, (int)request.RedundancyIndex))
+                try
                 {
-                    Log($"piece storage request from {ID.ToUsefulString(true)} (piece_id={request.ID.ToUsefulString(true)}, d={request.RedundancyIndex}) FAILED verification");
+                    var request = LZ4MessagePackSerializer.Deserialize<PieceStorageRequest>(e.Parameter);
+                    Log($"received piece storage request from {ID.ToUsefulString(true)} (piece_id={request.ID.ToUsefulString(true)}, d={request.RedundancyIndex})");
+
+                    var iterated_hash = HashSingleton.ComputeRounds(request.Data, request.RedundancyIndex);
+
+                    if (!HashSingleton.VerifyRounds(request.Data, request.ID, (int)request.RedundancyIndex))
+                    {
+                        Log($"piece storage request from {ID.ToUsefulString(true)} (piece_id={request.ID.ToUsefulString(true)}, d={request.RedundancyIndex}) FAILED verification");
+                        Reply(e.RequestID, new PieceStorageResponse(false));
+                        return;
+                    }
+
+                    Log($"piece storage request from {ID.ToUsefulString(true)} (piece_id={request.ID.ToUsefulString(true)}, d={request.RedundancyIndex}) PASSED verification");
+
+                    SelfNode.LocalDataStore.Store(new Piece(request.Data, request.RedundancyIndex) { Source = ID });
+                    Reply(e.RequestID, new PieceStorageResponse(true, iterated_hash));
+                }
+                catch (Exception ex)
+                {
+                    Log($"failed to handle piece storage request from {ID.ToUsefulString(true)}, exception thrown: {ex}");
                     Reply(e.RequestID, new PieceStorageResponse(false));
                     return;
                 }
-
-                Log($"piece storage request from {ID.ToUsefulString(true)} (piece_id={request.ID.ToUsefulString(true)}, d={request.RedundancyIndex}) PASSED verification");
-
-                SelfNode.LocalDataStore.Store(new Piece(request.Data, request.RedundancyIndex) { Source = ID });
-                Reply(e.RequestID, new PieceStorageResponse(true, iterated_hash));
             });
         }
 
