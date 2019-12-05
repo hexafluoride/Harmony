@@ -55,6 +55,7 @@ namespace Harmony
             var listen_arg = "";
             var api_listen_arg = "";
             bool test_mode = false;
+            bool daemon_mode = false;
 
             OptionSet set = null;
             set = new OptionSet()
@@ -63,7 +64,8 @@ namespace Harmony
                 {"l|listen=", "Starts listening for Harmony connections on the given IP endpoint. If only an integer is specified, treat the argument as 127.0.0.1:<port>.", l => listen_arg = l },
                 {"api=", "Starts listening for HTTP requests on the given IP endpoint. Implements the Harmony REST API.", l => api_listen_arg = l },
                 {"test", "Starts an interactive test session after boot.", t => test_mode = true },
-                {"c|cache=", "Instructs Harmony to read cached pieces from the given cache directory.", c => data_store.CachePath = c }
+                {"c|cache=", "Instructs Harmony to read cached pieces from the given cache directory.", c => data_store.CachePath = c },
+                {"daemon", "Replaces stdin reads with indefinite waits, useful for when running as a daemon", d => daemon_mode = true }
             };
 
             var cli_leftovers = set.Parse(args);
@@ -215,7 +217,10 @@ namespace Harmony
                 }
             }
 
-            Console.ReadLine();
+            if (daemon_mode)
+                Thread.Sleep(-1);
+            else
+                Console.ReadLine();
 
             Node.Shutdown();
 
