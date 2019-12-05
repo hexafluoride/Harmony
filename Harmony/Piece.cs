@@ -5,14 +5,31 @@ using System.Text;
 
 namespace Harmony
 {
+    [MessagePackObject]
     public class Piece
     {
-        public byte[] OriginalID { get; set; }
-        public uint RedundancyIndex { get; set; }
+        [Key(0)]
         public byte[] ID { get; set; }
-        public byte[] Data { get; set; }
 
+        [Key(1)]
+        public uint RedundancyIndex { get; set; }
+
+        [Key(2)]
+        public byte[] OriginalID { get; set; }
+
+        [Key(3)]
+        public DateTime Created { get; set; }
+
+        [Key(4)]
+        public byte[] Metadata { get; set; }
+
+        [Key(5)]
+        public byte[] Data { get; set; }
+        
+        [IgnoreMember]
         public byte[] Source { get; set; }
+
+        public Piece() { }
 
         internal Piece(byte[] data, byte[] id, uint rounds)
         {
