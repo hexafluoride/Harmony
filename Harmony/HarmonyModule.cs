@@ -1,8 +1,9 @@
 ﻿using Chordette;
 
 using Nancy;
+using Nancy.Configuration;
 using Nancy.Conventions;
-
+using Nancy.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -35,14 +36,103 @@ namespace Harmony
                     Stable = Node.Stable,
                     ListenEndPoint = Node.ListenEndPoint.ToString(),
 
-                    ID = Node.ID.ToUsefulString(),
+                    id = Node.ID.ToUsefulString(),
                     Successor = Node.Successor.ToUsefulString(),
                     Predecessor = Node.Predecessor.ToUsefulString(),
 
                     Connections = Node.Network.PeerCount,
                     CandidatePeers = Node.Network.GetCandidatePeers().Count(),
-                    KeysInMemory = Node.LocalDataStore.Pieces.Count
+                    KeysInMemory = Node.LocalDataStore.Pieces.Values
+                        .Where(piece => piece != null)
+                        .Select(piece => new
+                        {
+                            id = piece.OriginalID.ToUsefulString(),
+                            d = piece.RedundancyIndex,
+                            IteratedID = piece.ID.ToUsefulString(),
+                            Contents = $"{piece.Data.ToUsefulString(true)} ({piece.Data.Length} bytes)",
+                            ContentsText = piece.Data.Length > 50 ? "(too long)" : Encoding.UTF8.GetString(piece.Data),
+                            Source = piece.Source.ToUsefulString()
+                        })
                 });
+            });
+
+            Get("/file", _ =>
+            {
+                if (Node == null || !Node.Running)
+                    return CreateError("Node is down", HttpStatusCode.ServiceUnavailable);
+
+                var id_str = "";
+                id_str = Request.Query["id"] ?? "";
+
+                if (id_str.Length != Node.KeySize * 2 ||
+                    !Utilities.TryParseBytesFromString(id_str, out byte[] descriptor_piece_id))
+                    return CreateError("Invalid piece ID");
+
+                var descriptor_piece = Node.RetrievePiece(descriptor_piece_id, true);
+                var descriptor = FileDescriptor.Deserialize(descriptor_piece.Data);
+
+                var pieces = descriptor.PieceIdentifiers.Select(piece_id => Node.RetrievePiece(piece_id));
+
+                if (pieces.Any(p => p == null))
+                    return CreateError($"Failed to retrieve {pieces.Count(p => p == null)} pieces out of {descriptor.PieceIdentifiers.Count}");
+
+                var descriptor_mime_type = descriptor.MimeType;
+                var whitelisted_mime_types = new[] {
+                    "image/*",
+                    "audio/*",
+                    "video/*",
+                    "font/*",
+                    "model/*",
+                    "text/plain",
+                    "text/csv",
+                    "application/pdf",
+                    "application/octet-stream"
+                };
+
+                if (!whitelisted_mime_types.Any(allowed_type => MimeMapper.WildcardMatch(allowed_type, descriptor_mime_type)))
+                    descriptor_mime_type = "application/octet-stream";
+
+                return new Response()
+                {
+                    Contents = (str) => 
+                    {
+                        foreach (var piece in pieces)
+                            str.Write(piece.Data, 0, piece.Data.Length);
+
+                        str.Flush();
+                    },
+                    ContentType = descriptor_mime_type,
+                    StatusCode = HttpStatusCode.OK
+                };
+            });
+
+            Get("/upload", _ => Response.AsText("<form action=\"file\" method=\"post\" enctype=\"multipart/form-data\"><input type=\"file\" id=\"file\" name=\"file\"><input type=\"submit\"></form>", "text/html"));
+            Post("/file", _ =>
+            {
+                var file = Request.Files.FirstOrDefault();
+
+                if (file == null)
+                    return CreateError("No file received");
+
+                if (Node == null || !Node.Running)
+                    return CreateError("Node is down", HttpStatusCode.ServiceUnavailable);
+
+                (var descriptor, var pieces) = FileDescriptor.FromFile(file.Value, file.Name);
+                var descriptor_blob = descriptor.Serialize();
+
+                var pieces_to_be_stored = new[] { descriptor_blob }.Concat(pieces);
+                var resulting_pieces = pieces_to_be_stored.ToDictionary(
+                    piece => HashSingleton.Compute(piece).ToUsefulString(), 
+                    piece => Node.StorePiece(piece).Select(id => id.ToUsefulString()));
+
+                return Response.AsJson(new
+                {
+                    Success = resulting_pieces.All(piece_pair => piece_pair.Value.Any()),
+                    FileID = HashSingleton.Compute(descriptor_blob).ToUsefulString(),
+                    StoredPieces = resulting_pieces.Keys,
+                    StoredPiecesWithDuplicates = resulting_pieces
+                }).WithHeader("Location", $"/file?id={HashSingleton.Compute(descriptor_blob).ToUsefulString()}")
+                .WithStatusCode(HttpStatusCode.Created);
             });
 
             Get("/successor", _ =>
@@ -78,7 +168,7 @@ namespace Harmony
                     !Utilities.TryParseBytesFromString(id_str, out byte[] piece_id))
                     return CreateError("Invalid piece ID");
 
-                var piece = Node.RetrievePiece(piece_id);
+                var piece = Node.RetrievePiece(piece_id, true);
 
                 if (piece == null)
                     return CreateError("Couldn't retrieve piece");
@@ -89,10 +179,12 @@ namespace Harmony
 
                     Piece = new
                     {
-                        ID = piece.OriginalID.ToUsefulString(),
+                        id = piece.OriginalID.ToUsefulString(),
                         d = piece.RedundancyIndex,
                         IteratedID = piece.ID.ToUsefulString(),
-                        Contents = $"{piece.Data.ToUsefulString(true)} ({piece.Data.Length} bytes)"
+                        Contents = $"{piece.Data.ToUsefulString(true)} ({piece.Data.Length} bytes)",
+                        ContentsText = Encoding.UTF8.GetString(piece.Data),
+                        Source = piece.Source.ToUsefulString()
                     }
                 });
             });
@@ -101,6 +193,12 @@ namespace Harmony
             {
                 var id_str = ((string)(_.id));
                 return Response.AsRedirect($"/successor?id={id_str}");
+            });
+
+            Get("/file/{id}", _ =>
+            {
+                var id_str = ((string)(_.id));
+                return Response.AsRedirect($"/file?id={id_str}");
             });
 
             Get("/piece/{id}", _ =>
@@ -133,15 +231,8 @@ namespace Harmony
                 return Response.AsJson(new
                 {
                     Success = pieces.Any(),
-                    Pieces = pieces.Select(id => id.ToUsefulString())
-                    //Pieces = pieces.Select(piece_id => Node.RetrievePiece(piece_id))
-                    //    .Where(piece => piece != null)
-                    //    .Select(piece => new
-                    //    {
-                    //        ID = piece.OriginalID.ToUsefulString(),
-                    //        d = piece.RedundancyIndex,
-                    //        Contents = $"{piece.Data.ToUsefulString(true)} ({piece.Data.Length} bytes)"
-                    //    })
+                    PieceID = pieces.FirstOrDefault().ToUsefulString(),
+                    Copies = pieces.Select(id => id.ToUsefulString())
                 });
             });
 

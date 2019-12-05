@@ -28,5 +28,7 @@ namespace Harmony
 
         public static bool Verify(byte[] data, byte[] hash) => Compute(data).SequenceEqual(hash);
         public static bool VerifyRounds(byte[] data, byte[] hash, int rounds) => ComputeRounds(data, rounds).SequenceEqual(hash);
+
+        public static HashAlgorithm Duplicate() => Activator.CreateInstance(Hash.GetType()) as HashAlgorithm;
     }
 }

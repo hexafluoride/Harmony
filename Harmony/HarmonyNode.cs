@@ -283,14 +283,14 @@ namespace Harmony
             }
         }
 
-        public Piece RetrievePiece(byte[] id)
+        public Piece RetrievePiece(byte[] id, bool skip_cache = false)
         {
             int d = 5;
 
             // try to find the piece in our internal cache
             (var piece, byte[] locally_retrieved) = RetrievePieceLocally(id);
 
-            if (locally_retrieved != null)
+            if (locally_retrieved != null && !skip_cache)
                 return piece;
 
             // by this point, we know that the data isn't cached locally
