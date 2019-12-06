@@ -43,6 +43,7 @@ namespace Harmony
 
             LogManager.Configuration = nlog_config;
             Log.Info("Harmony starting.");
+            Log.Debug($"args: [{string.Join(", ", args.Select(arg => $"\"{arg}\""))}]");
 
             // register IPAddressResolver for the serializer to work
             CompositeResolver.RegisterAndSetAsDefault(IPAddressResolver.Instance, StandardResolver.Instance);
@@ -78,6 +79,10 @@ namespace Harmony
             {
                 listen_ep = new IPEndPoint(IPAddress.Loopback, listen_port);
             }
+            else if (IPAddress.TryParse(listen_arg, out IPAddress listen_addr))
+            {
+                listen_ep = new IPEndPoint(listen_addr, 30000 + Random.Next(1000));
+            }
             else if (Utilities.TryParseIPEndPoint(listen_arg, out IPEndPoint temp_ep))
             {
                 listen_ep = temp_ep;
@@ -86,6 +91,10 @@ namespace Harmony
             if (ushort.TryParse(api_listen_arg, out ushort api_listen_port))
             {
                 api_listen_ep = new IPEndPoint(IPAddress.Loopback, api_listen_port);
+            }
+            else if (IPAddress.TryParse(api_listen_arg, out IPAddress api_listen_addr))
+            {
+                api_listen_ep = new IPEndPoint(api_listen_addr, 8000 + Random.Next(1000));
             }
             else if (Utilities.TryParseIPEndPoint(api_listen_arg, out IPEndPoint temp_ep))
             {
