@@ -293,14 +293,24 @@ namespace Harmony
                 if (block == default)
                     return CreateError("Either specify a Harmony ID via id= or an IP endpoint via ep=");
 
+                var peer_id = block.GenerateID();
+
+                if (peer_id.SequenceEqual(Node.ID))
+                    return CreateError("Can't connect to ourselves");
+
                 var success = false;
 
                 if (!Node.Stable)
-                    success = Node.Join(block.GenerateID());
+                    success = Node.Join(peer_id);
                 else
-                    success = Node.Network.Connect(block.GenerateID()) != null;
+                    success = Node.Network.Connect(peer_id) != null;
 
-                return Response.AsJson(new { Success = success });
+                return Response.AsJson(new
+                {
+                    Success = success,
+                    PeerID = peer_id.ToUsefulString(),
+                    SelfID = Node.ID.ToUsefulString()
+                });
             });
 
             Get("/shutdown", _ =>
