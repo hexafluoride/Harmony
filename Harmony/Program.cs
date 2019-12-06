@@ -26,6 +26,7 @@ namespace Harmony
         static Logger Log = LogManager.GetCurrentClassLogger();
         static HarmonyNode Node { get; set; }
         static IPEndPoint ListenEP { get; set; }
+        static Uri Tracker { get; set; }
         static Random Random = new Random();
 
         static void Main(string[] args)
@@ -54,8 +55,10 @@ namespace Harmony
             var bootstrap_list = new List<string>();
             var listen_arg = "";
             var api_listen_arg = "";
+            var tracker_arg = "";
             bool test_mode = false;
             bool daemon_mode = false;
+            var tracker_interval = 60;
 
             OptionSet set = null;
             set = new OptionSet()
@@ -69,7 +72,9 @@ namespace Harmony
                     "If only an address is specified, treats the argument as <addr>:<random_port>", l => api_listen_arg = l },
                 {"test", "Starts an interactive test session after boot.", t => test_mode = true },
                 {"c|cache=", "Instructs Harmony to read cached pieces from the given cache directory.", c => data_store.CachePath = c },
-                {"daemon", "Replaces stdin reads with indefinite waits, useful for when running as a daemon", d => daemon_mode = true }
+                {"daemon", "Replaces stdin reads with indefinite waits, useful for when running as a daemon", d => daemon_mode = true },
+                {"t|tracker=", "Announces and asks for peers from a tracker Zgibe server.", t => tracker_arg = t },
+                {"tracker-interval", "Sets the announcement and node stability check interval in seconds.", i => tracker_interval = int.Parse(i) }
             };
 
             var cli_leftovers = set.Parse(args);
@@ -112,6 +117,22 @@ namespace Harmony
                 listen_ep = new IPEndPoint(IPAddress.Loopback, 30000 + Random.Next(1000));
             }
 
+            if (!string.IsNullOrWhiteSpace(tracker_arg))
+            {
+                if (Uri.TryCreate(tracker_arg, UriKind.Absolute, out Uri tracker))
+                {
+                    Tracker = tracker;
+                }
+                else if (Uri.TryCreate($"http://{tracker_arg}/", UriKind.Absolute, out tracker))
+                {
+                    Tracker = tracker;
+                }
+                else
+                {
+                    Log.Warn($"Invalid argument passed to --tracker: \"{tracker_arg}\" is not a parsable HTTP URI. Try something in the form of http://tracker.example.com/.");
+                }
+            }
+
             ListenEP = listen_ep;
             Log.Info($"Listening for Harmony connections on {listen_ep}");
 
@@ -139,6 +160,10 @@ namespace Harmony
             Node.LocalDataStore = data_store;
 
             HarmonyModule.Node = Node; // Nancy module for the HTTP API
+
+            // announce self to tracker if configured
+            if (Tracker != default)
+                Announcer.AnnounceTo(Tracker, Node);
 
             // configure title display
             Node.PredecessorChanged += (e, s) => { UpdateDisplay(); };
@@ -189,6 +214,65 @@ namespace Harmony
                     $"{Node.ID.ToUsefulString()} or {listen_ep} to another Harmony instance.");
 
                 Node.Join(default);
+            }
+
+            // keep checking stability and asking for nodes from tracker if configured
+            if (Tracker != default && tracker_interval > 0)
+            {
+                Task.Run(() => 
+                {
+                    Log.Info("Starting tracker thread...");
+
+                    while (true)
+                    {
+                        try
+                        {
+                            Announcer.AnnounceTo(Tracker, Node);
+
+                            if (!Node.Stable)
+                            {
+                                var peers = Announcer.GetPeers(Tracker).Where(i => i != null && i.SequenceEqual(Node.ID) != true).ToArray();
+
+                                if (!peers.Any())
+                                {
+                                    Log.Warn($"Currently unstable with {Node.Network.PeerCount} connections, our tracker isn't giving us any peers.");
+                                }
+                                else
+                                {
+                                    Log.Info($"Received {peers.Length} peers from tracker");
+                                    bool any_successful = false;
+
+                                    if (!Node.Joined)
+                                    {
+                                        any_successful = Node.Join(peers[Random.Next(peers.Length)]);
+                                    }
+
+                                    if (Node.Joined)
+                                    {
+                                        foreach (var peer in peers)
+                                        {
+                                            any_successful = Node.Connect(peer) != null || any_successful;
+                                            Thread.Sleep(1000);
+                                        }
+                                    }
+
+                                    if (!any_successful)
+                                        Log.Warn("Couldn't connect to any tracker-provided peers.");
+                                    else
+                                    {
+                                        Node.BootstrapSelf();
+                                    }
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Warn($"Exception in tracker thread: {ex}");
+                        }
+
+                        Thread.Sleep(tracker_interval * 1000);
+                    }
+                });
             }
 
             if (test_mode)

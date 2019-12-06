@@ -3,9 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.28307.645
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Harmony", "Harmony\Harmony.csproj", "{5DAF2AFB-B839-432C-A8BD-8B8B16D83837}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Harmony", "Harmony\Harmony.csproj", "{5DAF2AFB-B839-432C-A8BD-8B8B16D83837}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Chordette", "Chordette\Chordette\Chordette.csproj", "{8AE9DCC0-27BD-47E1-AB98-ACFEB47FEA89}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Zgibe", "Zgibe\Zgibe.csproj", "{BB604598-B750-4638-A808-FA20D27882B8}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +23,10 @@ Global
 		{8AE9DCC0-27BD-47E1-AB98-ACFEB47FEA89}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8AE9DCC0-27BD-47E1-AB98-ACFEB47FEA89}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8AE9DCC0-27BD-47E1-AB98-ACFEB47FEA89}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BB604598-B750-4638-A808-FA20D27882B8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BB604598-B750-4638-A808-FA20D27882B8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BB604598-B750-4638-A808-FA20D27882B8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BB604598-B750-4638-A808-FA20D27882B8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -13,7 +13,7 @@ namespace Harmony
     public class HarmonyNode : Node
     {
         public new HarmonyNetwork Network { get => base.Network as HarmonyNetwork; set => base.Network = value; }
-        
+
         public JoinBlock JoinBlock { get; set; }
         public EphemeralJoinBlock EphemeralJoinBlock { get; set; }
 
@@ -152,7 +152,7 @@ namespace Harmony
             {
                 if (piece.ID.IsNotIn(start, end))
                     continue;
-                
+
                 var response = target.Store(piece, true);
 
                 if (response != null && piece.ID.SequenceEqual(response.Key))
@@ -258,6 +258,12 @@ namespace Harmony
             }
 
             return (null, null);
+        }
+
+        public RemoteNode Connect(byte[] id)
+        {
+            var block = JoinBlock.FromID(id);
+            return Connect(new IPEndPoint(block.Address, block.Port));
         }
 
         public override RemoteNode Connect(IPEndPoint ep)
