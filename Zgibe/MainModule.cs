@@ -14,6 +14,8 @@ namespace Zgibe
     {
         public static DateTime Start = DateTime.Now;
         public static HashSet<byte[]> Peers = new HashSet<byte[]>(new StructuralEqualityComparer());
+        public static Dictionary<byte[], DateTime> LastAnnounce = new Dictionary<byte[], DateTime>(new StructuralEqualityComparer());
+
         public Response CreateError(string message, HttpStatusCode code = HttpStatusCode.BadRequest) =>
             Response.AsJson(new { Success = false, Message = message }).WithStatusCode(code);
 
@@ -50,7 +52,10 @@ namespace Zgibe
                         if (!join_block.Verify(announcement.ID))
                             throw new Exception();
 
-                        bool known = Peers.Add(join_block.GenerateID());
+                        var id = join_block.GenerateID();
+
+                        bool known = Peers.Add(id);
+                        LastAnnounce[id] = DateTime.UtcNow;
 
                         return Response.AsJson(new
                         {

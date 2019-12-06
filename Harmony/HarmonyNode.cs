@@ -51,13 +51,13 @@ namespace Harmony
 
         public new void Start()
         {
+            RunningSemaphore.Set();
+            Running = true;
+
             base.Start();
 
             var stab_thread = new Thread((ThreadStart)StabilizerLoop);
             stab_thread.Start();
-
-            RunningSemaphore.Set();
-            Running = true;
         }
 
         public void Shutdown()
@@ -268,6 +268,12 @@ namespace Harmony
 
         public override RemoteNode Connect(IPEndPoint ep)
         {
+            if (ep == ListenEndPoint)
+                return null;
+
+            if (Network.Nodes.OfType<RemoteNode>().Any(n => n.Connection.RemoteEndPoint == ep))
+                return Network.Nodes[new JoinBlock(ep).GenerateID()] as RemoteNode;
+
             Log($"Connecting to {ep}...");
 
             try

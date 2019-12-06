@@ -1,4 +1,5 @@
-﻿using Harmony;
+﻿using Chordette;
+using Harmony;
 using MessagePack.Resolvers;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
@@ -18,6 +19,7 @@ namespace Zgibe
     {
         static Logger Log = LogManager.GetCurrentClassLogger();
         public static Random Random = new Random();
+        static int Timeout = 120;
 
         static void Main(string[] args)
         {
@@ -46,7 +48,8 @@ namespace Zgibe
             {
                 {"l|listen=", "Starts listening for Harmony connections on the given IP endpoint.", l => listen_arg = l },
                 {"h|housekeep=", "Tests a random peer to see if they're alive every n seconds.", h => housekeeping_interval = int.Parse(h) },
-                {"no-housekeeping", "Doesn't purge dead peers.", h => housekeeping_interval = 0 }
+                {"no-housekeeping", "Doesn't purge dead peers.", h => housekeeping_interval = 0 },
+                {"t|timeout=", "Sets the amount of time before an announcement is considered stale.", t => Timeout = int.Parse(t) }
             };
 
             var cli_leftovers = set.Parse(args);
@@ -81,6 +84,7 @@ namespace Zgibe
                 {
                     while (true)
                     {
+                        Housekeep();
                         Thread.Sleep(housekeeping_interval * 1000);
                     }
                 });
@@ -107,11 +111,11 @@ namespace Zgibe
                 return;
 
             var random_peer = peers_snapshot[Random.Next(peers_snapshot.Length)];
-
-            // TODO: actually check whether the peer is alive or not
-
-            if (false)
+            
+            if (!MainModule.LastAnnounce.ContainsKey(random_peer) ||
+                (DateTime.UtcNow - MainModule.LastAnnounce[random_peer]).TotalSeconds > Timeout)
             {
+                Log.Info($"Purged stale peer {random_peer.ToUsefulString()}");
                 MainModule.Peers.Remove(random_peer);
             }
         }

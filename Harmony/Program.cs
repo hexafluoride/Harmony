@@ -74,7 +74,7 @@ namespace Harmony
                 {"c|cache=", "Instructs Harmony to read cached pieces from the given cache directory.", c => data_store.CachePath = c },
                 {"daemon", "Replaces stdin reads with indefinite waits, useful for when running as a daemon", d => daemon_mode = true },
                 {"t|tracker=", "Announces and asks for peers from a tracker Zgibe server.", t => tracker_arg = t },
-                {"tracker-interval", "Sets the announcement and node stability check interval in seconds.", i => tracker_interval = int.Parse(i) }
+                {"tracker-interval=", "Sets the announcement and node stability check interval in seconds.", i => tracker_interval = int.Parse(i) }
             };
 
             var cli_leftovers = set.Parse(args);
@@ -244,7 +244,16 @@ namespace Harmony
 
                                     if (!Node.Joined)
                                     {
-                                        any_successful = Node.Join(peers[Random.Next(peers.Length)]);
+                                        foreach (var peer in peers)
+                                        {
+                                            var join_succ = Node.Join(peer);
+
+                                            if (join_succ)
+                                            {
+                                                any_successful = true;
+                                                break;
+                                            }
+                                        }
                                     }
 
                                     if (Node.Joined)
@@ -252,7 +261,7 @@ namespace Harmony
                                         foreach (var peer in peers)
                                         {
                                             any_successful = Node.Connect(peer) != null || any_successful;
-                                            Thread.Sleep(1000);
+                                            Thread.Sleep(250);
                                         }
                                     }
 
