@@ -260,13 +260,7 @@ namespace Harmony
             return (null, null);
         }
 
-        public RemoteNode Connect(byte[] id)
-        {
-            var block = JoinBlock.FromID(id);
-            return Connect(new IPEndPoint(block.Address, block.Port));
-        }
-
-        public override RemoteNode Connect(IPEndPoint ep)
+        public override RemoteNode CreateRemoteNode(IPEndPoint ep)
         {
             if (ep == ListenEndPoint)
                 return null;

@@ -260,7 +260,7 @@ namespace Harmony
                                     {
                                         foreach (var peer in peers)
                                         {
-                                            any_successful = Node.Connect(peer) != null || any_successful;
+                                            any_successful = Node.Network.Connect(peer) != null || any_successful;
                                             Thread.Sleep(250);
                                         }
                                     }

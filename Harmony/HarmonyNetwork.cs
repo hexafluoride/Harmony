@@ -27,7 +27,7 @@ namespace Harmony
                 return null;
 
             var endpoint = new IPEndPoint(join_block.Address, join_block.Port);
-            var node = Self.Connect(endpoint) as HarmonyRemoteNode;
+            var node = Self.CreateRemoteNode(endpoint) as HarmonyRemoteNode;
 
             if (node == null)
             {
