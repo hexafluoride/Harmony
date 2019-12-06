@@ -62,8 +62,12 @@ namespace Harmony
             set = new OptionSet()
             {
                 {"b|bootstrap=", "A comma-separated list of Harmony IDs or IP endpoints. (can be mixed)", b => bootstrap_list.AddRange(b.Split(',')) },
-                {"l|listen=", "Starts listening for Harmony connections on the given IP endpoint. If only an integer is specified, treat the argument as 127.0.0.1:<port>.", l => listen_arg = l },
-                {"api=", "Starts listening for HTTP requests on the given IP endpoint. Implements the Harmony REST API.", l => api_listen_arg = l },
+                {"l|listen=", "Starts listening for Harmony connections on the given IP endpoint. " +
+                    "If only an integer is specified, treats the argument as 127.0.0.1:<port>." +
+                    "If only an address is specified, treats the argument as <addr>:<random_port>", l => listen_arg = l },
+                {"api=", "Starts listening for HTTP requests on the given IP endpoint. Implements the Harmony REST API." +
+                    "If only an integer is specified, treats the argument as 127.0.0.1:<port>." +
+                    "If only an address is specified, treats the argument as <addr>:<random_port>", l => api_listen_arg = l },
                 {"test", "Starts an interactive test session after boot.", t => test_mode = true },
                 {"c|cache=", "Instructs Harmony to read cached pieces from the given cache directory.", c => data_store.CachePath = c },
                 {"daemon", "Replaces stdin reads with indefinite waits, useful for when running as a daemon", d => daemon_mode = true }
