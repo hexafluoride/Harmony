@@ -44,7 +44,7 @@ namespace Harmony
 
                         PeerCount = Node.Network.PeerCount,
                         Connections = Node.Network.Nodes.Values.OfType<RemoteNode>()
-                            .Select(n => new { id = n.ID.ToUsefulString(), ep = ((IPEndPoint)n.Connection.RemoteEndPoint).ToString(), alive = n.Ping() }),
+                            .Select(n => new { id = n.ID.ToUsefulString(), ep = n.RemoteEndPoint.ToString(), alive = n.Ping() }),
                         CandidatePeers = Node.Network.GetCandidatePeers().Count(),
                         KeysInMemory = Node.LocalDataStore.Pieces.Values
                             .Where(piece => piece != null)

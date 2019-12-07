@@ -277,16 +277,18 @@ namespace Harmony
 
         public override RemoteNode CreateRemoteNode(IPEndPoint ep)
         {
-            if (ep == ListenEndPoint)
-                return null;
-
-            if (Network.Nodes.OfType<RemoteNode>().Any(n => n.Connection.RemoteEndPoint == ep))
-                return Network.Nodes[new JoinBlock(ep).GenerateID()] as RemoteNode;
-
-            Log($"Connecting to {ep}...");
-
             try
             {
+                var id = new JoinBlock(ep).GenerateID();
+
+                if (ep == ListenEndPoint || id.SequenceEqual(ID))
+                    return null;
+
+                if (Network.Nodes.OfType<RemoteNode>().Any(n => n.ID.SequenceEqual(ID)))
+                    return Network.Nodes[id] as RemoteNode;
+
+                Log($"Connecting to {ep}...");
+
                 var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
                 socket.Connect(ep);
 
