@@ -62,6 +62,8 @@ namespace Harmony
 
         public void Shutdown()
         {
+            Log("Node shutdown initiated");
+
             var next_spot = (new BigInteger(ID, true) + 1).ToPaddedArray(ID.Length);
             var successor_id = FindSuccessor(next_spot) ?? Successor;
 
