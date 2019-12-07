@@ -40,7 +40,9 @@ namespace Harmony
                     Successor = Node.Successor.ToUsefulString(),
                     Predecessor = Node.Predecessor.ToUsefulString(),
 
-                    Connections = Node.Network.PeerCount,
+                    PeerCount = Node.Network.PeerCount,
+                    Connections = Node.Network.Nodes.Values.OfType<RemoteNode>()
+                        .Select(n => new { id = n.ID.ToUsefulString(), ep = ((IPEndPoint)n.Connection.RemoteEndPoint).ToString(), alive = n.Ping() }),
                     CandidatePeers = Node.Network.GetCandidatePeers().Count(),
                     KeysInMemory = Node.LocalDataStore.Pieces.Values
                         .Where(piece => piece != null)
