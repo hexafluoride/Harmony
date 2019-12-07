@@ -211,8 +211,8 @@ namespace Harmony
                 if (node.ID.SequenceEqual(Successor))
                 {
                     Stabilize(); // immediately try to find a new successor
-                    NotifyForwards(ID); // notify our new successor of our existence
-                    //NotifyBackwards(ID); // notify our new predecessor of our existence
+                    Network[Successor]?.NotifyForwards(ID); // notify our new successor of our existence
+                    Network[Predecessor]?.NotifyBackwards(ID); // notify our new predecessor of our existence
                 }
                 else if (node.ID.SequenceEqual(Predecessor))
                 {
