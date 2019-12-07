@@ -208,18 +208,25 @@ namespace Harmony
         {
             var node = sender as HarmonyRemoteNode;
 
+            if (node == null || node.ID == null)
+                return;
+
             if (e.LongTerm)
             {
-                if (node.ID.SequenceEqual(Successor))
+                try
                 {
-                    Stabilize(); // immediately try to find a new successor
-                    Network[Successor]?.NotifyForwards(ID); // notify our new successor of our existence
-                    Network[Predecessor]?.NotifyBackwards(ID); // notify our new predecessor of our existence
+                    if (node.ID.SequenceEqual(Successor))
+                    {
+                        Stabilize(); // immediately try to find a new successor
+                        Network[Successor]?.NotifyForwards(ID); // notify our new successor of our existence
+                        Network[Predecessor]?.NotifyBackwards(ID); // notify our new predecessor of our existence
+                    }
+                    else if (node.ID.SequenceEqual(Predecessor))
+                    {
+                        // TODO: find a new predecessor somehow
+                    }
                 }
-                else if (node.ID.SequenceEqual(Predecessor))
-                {
-                    // TODO: find a new predecessor somehow
-                }
+                catch {  }
             }
         }
 
