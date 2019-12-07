@@ -59,6 +59,19 @@ namespace Harmony
                     return;
                 }
             });
+
+            AddMessageHandler("acquire_lock", (s, e) => { Reply(e.RequestID, SelfNode.AcquireLock(e.Node)); });
+            AddMessageHandler("release_lock", (s, e) => { SelfNode.ReleaseLock(e.Parameter); });
+        }
+
+        public Lock AcquireLock()
+        {
+            return Request<Lock>("acquire_lock");
+        }
+
+        public void ReleaseLock(Lock @lock)
+        {
+            Invoke("release_lock", @lock.ID);
         }
 
         public T Request<T>(string method, byte[] parameter = default) => DeserializeSoft<T>(base.Request(method, parameter));

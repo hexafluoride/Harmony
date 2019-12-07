@@ -21,7 +21,11 @@ namespace Harmony
 
         public int StabilizeRate { get; set; }
         public bool Running { get; set; }
+
+        public bool Locked => ActiveLocks.Any(l => !l.Value.Expired);
+
         private ManualResetEvent RunningSemaphore = new ManualResetEvent(false);
+        private Dictionary<byte[], Lock> ActiveLocks = new Dictionary<byte[], Lock>(new StructuralEqualityComparer());
 
         public bool Stable => Network.IsReachable(Successor) && Network.IsReachable(Predecessor);
 
@@ -68,6 +72,13 @@ namespace Harmony
 
         public void Shutdown()
         {
+            if (Locked)
+            {
+                Log($"Waiting for {ActiveLocks.Count} locks...");
+                WaitLocks();
+                Log($"Unlocked.");
+            }
+
             Log("Node shutdown initiated");
 
             var next_spot = (new BigInteger(ID, true) + 1).ToPaddedArray(ID.Length);
@@ -76,39 +87,36 @@ namespace Harmony
             if (successor_id == null || successor_id.Length == 0 || successor_id.SequenceEqual(ID))
             {
                 // can't perform key handoff
-                Log("early break 0");
             }
             else
             {
                 // connect to successor
                 var uncasted_successor = Network[successor_id];
+                Lock successor_lock = null;
 
-                while (uncasted_successor == null || !(uncasted_successor is HarmonyRemoteNode))
+                while ((uncasted_successor == null || !(uncasted_successor is HarmonyRemoteNode)) || 
+                    (successor_lock = ((HarmonyRemoteNode)uncasted_successor).AcquireLock()) == null)
                 {
                     successor_id = FindSuccessor(successor_id); // keep going around the Chord circle
 
                     if (successor_id.SequenceEqual(ID)) // we've looped around and reached ourselves
                     {
-                        Log("early break 1");
                         break;
                     }
                 }
 
-                if (uncasted_successor != null && uncasted_successor is HarmonyRemoteNode)
+                if (uncasted_successor != null && uncasted_successor is HarmonyRemoteNode && successor_lock != null)
                 {
                     var successor = uncasted_successor as HarmonyRemoteNode;
                     var handed_off = HandoffRange(successor).Count();
 
                     Log($"Handed off {handed_off} pieces out of {LocalDataStore.Pieces.Count} (missed {LocalDataStore.Pieces.Count - handed_off})");
+
+                    successor.ReleaseLock(successor_lock);
                 }
             }
 
             Stop();
-        }
-
-        private void OnPredecessorChanged(object sender, PredecessorChangedEventArgs e)
-        {
-            HandoffRange(e.NewPredecessor, e.PreviousPredecessor, e.NewPredecessor);
         }
 
         public void Stop()
@@ -121,6 +129,48 @@ namespace Harmony
             foreach (var peer in Network.Nodes)
                 if (peer.Value is RemoteNode)
                     (peer.Value as RemoteNode).Disconnect(false);
+        }
+
+        private void WaitLocks()
+        {
+            // first get rid of any already-expired locks
+            ActiveLocks.Values.Where(l => l.Expired).ToList().ForEach(ReleaseLock);
+
+            // find last lock to expire
+            var last_lock_expiry = ActiveLocks.Values.OrderByDescending(l => l.Expires).FirstOrDefault()?.Expires ?? DateTime.Now;
+
+            // wait
+            int wait_ms = (int)Math.Max(0, (DateTime.Now - last_lock_expiry).TotalMilliseconds);
+            Thread.Sleep(wait_ms);
+        }
+
+        private bool CanAcquireLock(byte[] source)
+        {
+            // TODO: prevent nodes from locking us forever
+            // right now this allows anyone to permanently lock us
+            return true;
+        }
+
+        internal Lock AcquireLock(byte[] source)
+        {
+            if (!CanAcquireLock(source))
+                return null;
+
+            var @lock = new Lock(source);
+            ActiveLocks[@lock.ID] = @lock;
+            return @lock;
+        }
+
+        internal void ReleaseLock(Lock @lock) => ReleaseLock(@lock.ID);
+        internal void ReleaseLock(byte[] lock_id)
+        {
+            if (ActiveLocks.ContainsKey(lock_id))
+                ActiveLocks.Remove(lock_id);
+        }
+
+        private void OnPredecessorChanged(object sender, PredecessorChangedEventArgs e)
+        {
+            HandoffRange(e.NewPredecessor, e.PreviousPredecessor, e.NewPredecessor);
         }
 
         private IEnumerable<Piece> HandoffRange(byte[] target, byte[] start = default, byte[] end = default)
