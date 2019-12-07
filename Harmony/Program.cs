@@ -44,8 +44,6 @@ namespace Harmony
             nlog_config.AddRuleForAllLevels(console_target);
 
             LogManager.Configuration = nlog_config;
-            Log.Info("Harmony starting.");
-            Log.Debug($"args: [{string.Join(", ", args.Select(arg => $"\"{arg}\""))}]");
 
             // register IPAddressResolver for the serializer to work
             CompositeResolver.RegisterAndSetAsDefault(IPAddressResolver.Instance, StandardResolver.Instance);
@@ -61,6 +59,7 @@ namespace Harmony
             bool test_mode = false;
             bool daemon_mode = false;
             var tracker_interval = 60;
+            var max_peers = 8;
 
             OptionSet set = null;
             set = new OptionSet()
@@ -77,10 +76,24 @@ namespace Harmony
                 {"daemon", "Replaces stdin reads with indefinite waits, useful for when running as a daemon", d => daemon_mode = true },
                 {"t|tracker=", "Announces and asks for peers from a tracker Zgibe server.", t => tracker_arg = t },
                 {"tracker-interval=", "Sets the announcement and node stability check interval in seconds.", i => tracker_interval = int.Parse(i) },
-                {"n|name=", "Sets the node name, announced to other peers and added to the response headers of the HTTP API.", n => Name = n }
+                {"n|name=", "Sets the node name, announced to other peers and added to the response headers of the HTTP API.", n => Name = n },
+                {"m|max-peers=", "The maximum number of peers to connect to. Recommended to be set above 4.", m => max_peers = int.Parse(m) },
+                {"?|h|help", "Shows this text.", h => 
+                {
+                    Console.WriteLine("usage: harmony [--listen [<IP>:]<port>] [--api [<IP>:]port] [--bootstrap ...]\n" +
+                                      "               [--tracker <URI>] [--name <name>] [--tracker-interval <seconds>]\n" +
+                                      "               [--cache <path>] [--max-peers <N>] [--test] [--help] [--daemon]\n");
+                    Console.WriteLine();
+                    
+                    set.WriteOptionDescriptions(Console.Out);
+                    Environment.Exit(0);
+                } }
             };
 
             var cli_leftovers = set.Parse(args);
+
+            Log.Info("Harmony starting.");
+            Log.Debug($"args: [{string.Join(", ", args.Select(arg => $"\"{arg}\""))}]");
 
             // interpret command line arguments
             IPEndPoint listen_ep = new IPEndPoint(IPAddress.None, 0);
@@ -160,6 +173,7 @@ namespace Harmony
             // initialize network parameters
             HashSingleton.Hash = SHA256.Create();
             Node = new HarmonyNode(listen_ep);
+            Node.Network.MaximumPeers = max_peers;
             Node.LocalDataStore = data_store;
 
             HarmonyModule.Node = Node; // Nancy module for the HTTP API
@@ -232,13 +246,13 @@ namespace Harmony
                         {
                             Announcer.AnnounceTo(Tracker, Node);
 
-                            if (!Node.Stable)
+                            if (!Node.Stable || Node.Network.PeerCount < (Node.Network.MaximumPeers - 1))
                             {
                                 var peers = Announcer.GetPeers(Tracker).Where(i => i != null && i.SequenceEqual(Node.ID) != true).ToArray();
 
                                 if (!peers.Any())
                                 {
-                                    Log.Warn($"Currently unstable with {Node.Network.PeerCount} connections, our tracker isn't giving us any peers.");
+                                    Log.Warn($"{Node.Network.PeerCount} connections, our tracker isn't giving us any peers.");
                                 }
                                 else
                                 {
