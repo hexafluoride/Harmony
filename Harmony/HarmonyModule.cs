@@ -29,33 +29,40 @@ namespace Harmony
                 if (Node == null)
                     return Response.AsJson(new { Running = false });
 
-                return Response.AsJson(new
+                try
                 {
-                    Running = Node.Running,
-                    Uptime = (long)(DateTime.Now - Start).TotalMilliseconds,
-                    Stable = Node.Stable,
-                    ListenEndPoint = Node.ListenEndPoint.ToString(),
+                    return Response.AsJson(new
+                    {
+                        Running = Node.Running,
+                        Uptime = (long)(DateTime.Now - Start).TotalMilliseconds,
+                        Stable = Node.Stable,
+                        ListenEndPoint = Node.ListenEndPoint.ToString(),
 
-                    id = Node.ID.ToUsefulString(),
-                    Successor = Node.Successor.ToUsefulString(),
-                    Predecessor = Node.Predecessor.ToUsefulString(),
+                        id = Node.ID.ToUsefulString(),
+                        Successor = Node.Successor.ToUsefulString(),
+                        Predecessor = Node.Predecessor.ToUsefulString(),
 
-                    PeerCount = Node.Network.PeerCount,
-                    Connections = Node.Network.Nodes.Values.OfType<RemoteNode>()
-                        .Select(n => new { id = n.ID.ToUsefulString(), ep = ((IPEndPoint)n.Connection.RemoteEndPoint).ToString(), alive = n.Ping() }),
-                    CandidatePeers = Node.Network.GetCandidatePeers().Count(),
-                    KeysInMemory = Node.LocalDataStore.Pieces.Values
-                        .Where(piece => piece != null)
-                        .Select(piece => new
-                        {
-                            id = piece.OriginalID.ToUsefulString(),
-                            d = piece.RedundancyIndex,
-                            IteratedID = piece.ID.ToUsefulString(),
-                            Contents = $"{piece.Data.ToUsefulString(true)} ({piece.Data.Length} bytes)",
-                            ContentsText = piece.Data.Length > 50 ? "(too long)" : Encoding.UTF8.GetString(piece.Data),
-                            Source = piece.Source.ToUsefulString()
-                        })
-                });
+                        PeerCount = Node.Network.PeerCount,
+                        Connections = Node.Network.Nodes.Values.OfType<RemoteNode>()
+                            .Select(n => new { id = n.ID.ToUsefulString(), ep = ((IPEndPoint)n.Connection.RemoteEndPoint).ToString(), alive = n.Ping() }),
+                        CandidatePeers = Node.Network.GetCandidatePeers().Count(),
+                        KeysInMemory = Node.LocalDataStore.Pieces.Values
+                            .Where(piece => piece != null)
+                            .Select(piece => new
+                            {
+                                id = piece.OriginalID.ToUsefulString(),
+                                d = piece.RedundancyIndex,
+                                IteratedID = piece.ID.ToUsefulString(),
+                                Contents = $"{piece.Data.ToUsefulString(true)} ({piece.Data.Length} bytes)",
+                                ContentsText = piece.Data.Length > 50 ? "(too long)" : Encoding.UTF8.GetString(piece.Data),
+                                Source = piece.Source.ToUsefulString()
+                            })
+                    });
+                }
+                catch (Exception ex)
+                {
+                    return CreateError($"{ex.GetType()} occurred while generating health page: {ex.Message}", HttpStatusCode.InternalServerError);
+                }
             });
 
             Get("/file", _ =>
