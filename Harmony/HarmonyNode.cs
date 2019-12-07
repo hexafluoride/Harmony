@@ -33,6 +33,12 @@ namespace Harmony
         public HarmonyNode(IPAddress listen_addr, int port, DataStore store = default) : base()
         {
             JoinBlock = new JoinBlock(listen_addr, (ushort)port);
+            EphemeralJoinBlock = new EphemeralJoinBlock()
+            {
+                Name = Program.Name,
+                Software = "harmony"
+            };
+
             ID = JoinBlock.GenerateID();
 
             LocalDataStore = LocalDataStore ?? new DataStore();

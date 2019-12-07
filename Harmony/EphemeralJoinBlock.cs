@@ -8,6 +8,8 @@ namespace Harmony
     [MessagePackObject(keyAsPropertyName: true)]
     public class EphemeralJoinBlock : IMessage
     {
+        public string Name { get; set; }
+
         public string Software { get; set; }
         public string Version { get; set; }
 
