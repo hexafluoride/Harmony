@@ -24,7 +24,9 @@ namespace Harmony
     class Program
     {
         static Logger Log = LogManager.GetCurrentClassLogger();
-        static HarmonyNode Node { get; set; }
+        public static HarmonyNode Node { get; set; }
+        public static string Name { get; set; }
+
         static IPEndPoint ListenEP { get; set; }
         static Uri Tracker { get; set; }
         static Random Random = new Random();
@@ -74,7 +76,8 @@ namespace Harmony
                 {"c|cache=", "Instructs Harmony to read cached pieces from the given cache directory.", c => data_store.CachePath = c },
                 {"daemon", "Replaces stdin reads with indefinite waits, useful for when running as a daemon", d => daemon_mode = true },
                 {"t|tracker=", "Announces and asks for peers from a tracker Zgibe server.", t => tracker_arg = t },
-                {"tracker-interval=", "Sets the announcement and node stability check interval in seconds.", i => tracker_interval = int.Parse(i) }
+                {"tracker-interval=", "Sets the announcement and node stability check interval in seconds.", i => tracker_interval = int.Parse(i) },
+                {"n|name=", "Sets the node name, announced to other peers and added to the response headers of the HTTP API.", n => Name = n }
             };
 
             var cli_leftovers = set.Parse(args);
