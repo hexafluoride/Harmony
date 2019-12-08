@@ -26,6 +26,7 @@ namespace Harmony
 
         private ManualResetEvent RunningSemaphore = new ManualResetEvent(false);
         private Dictionary<byte[], Lock> ActiveLocks = new Dictionary<byte[], Lock>(new StructuralEqualityComparer());
+        private bool AcceptingLocks = true;
 
         public bool Stable => Network.IsReachable(Successor) && Network.IsReachable(Predecessor);
 
@@ -72,6 +73,8 @@ namespace Harmony
 
         public void Shutdown()
         {
+            AcceptingLocks = false;
+
             if (Locked)
             {
                 Log($"Waiting for {ActiveLocks.Count} locks...");
@@ -148,7 +151,7 @@ namespace Harmony
         {
             // TODO: prevent nodes from locking us forever
             // right now this allows anyone to permanently lock us
-            return true;
+            return AcceptingLocks;
         }
 
         internal Lock AcquireLock(byte[] source)
