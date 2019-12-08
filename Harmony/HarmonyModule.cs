@@ -77,9 +77,12 @@ namespace Harmony
                     !Utilities.TryParseBytesFromString(id_str, out byte[] descriptor_piece_id))
                     return CreateError("Invalid piece ID");
 
-                var descriptor_piece = Node.RetrievePiece(descriptor_piece_id, true);
-                var descriptor = FileDescriptor.Deserialize(descriptor_piece.Data);
+                var descriptor_piece = Node.RetrievePiece(descriptor_piece_id);
 
+                if (descriptor_piece == null)
+                    return CreateError($"Failed to retrieve descriptor piece");
+
+                var descriptor = FileDescriptor.Deserialize(descriptor_piece.Data);
                 var pieces = descriptor.PieceIdentifiers.Select(piece_id => Node.RetrievePiece(piece_id));
 
                 if (pieces.Any(p => p == null))
