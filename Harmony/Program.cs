@@ -233,6 +233,13 @@ namespace Harmony
                 Node.Join(default);
             }
 
+            // configure SIGTERM handler to shutdown node/wait for in-progress shutdown
+            System.Runtime.Loader.AssemblyLoadContext.Default.Unloading += ctx =>
+            {
+                Log.Info("Shutting down...");
+                Node.Shutdown();
+            };
+
             // keep checking stability and asking for nodes from tracker if configured
             if (Tracker != default && tracker_interval > 0)
             {

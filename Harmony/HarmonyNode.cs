@@ -25,6 +25,8 @@ namespace Harmony
         public bool Locked => ActiveLocks.Any(l => !l.Value.Expired);
         public bool AcceptingPieces { get; set; }
 
+        private bool ShuttingDown = false;
+        private ManualResetEvent ShutdownSemaphore = new ManualResetEvent(true);
         private ManualResetEvent RunningSemaphore = new ManualResetEvent(false);
         private Dictionary<byte[], Lock> ActiveLocks = new Dictionary<byte[], Lock>(new StructuralEqualityComparer());
         private bool AcceptingLocks = true;
@@ -75,6 +77,20 @@ namespace Harmony
 
         public void Shutdown()
         {
+            lock (ShutdownSemaphore)
+            {
+                if (ShuttingDown)
+                {
+                    Log($"node-shutdown: Waiting for shutdown process already in motion");
+
+                    ShutdownSemaphore.WaitOne();
+                    return;
+                }
+
+                ShutdownSemaphore.Reset();
+                ShuttingDown = true;
+            }
+
             Log("node-shutdown: Node shutdown initiated");
             AcceptingLocks = false;
 
@@ -139,6 +155,7 @@ namespace Harmony
             }
 
             Stop();
+            ShutdownSemaphore.Set();
         }
 
         public void Stop()
