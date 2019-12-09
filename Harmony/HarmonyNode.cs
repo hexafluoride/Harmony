@@ -119,7 +119,7 @@ namespace Harmony
                     uncasted_successor = Network[successor_id];
                 }
 
-                if (uncasted_successor != null && uncasted_successor is HarmonyRemoteNode && successor_lock != null)
+                if (uncasted_successor != null && uncasted_successor is HarmonyRemoteNode && successor_lock != null && successor_lock.ID.Length != 0)
                 {
                     var successor = uncasted_successor as HarmonyRemoteNode;
                     var handed_off = HandoffRange(successor).Count();
