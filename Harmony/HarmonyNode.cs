@@ -83,6 +83,7 @@ namespace Harmony
                 WaitLocks();
                 Log($"Unlocked.");
             }
+            AcceptingPieces = false;
 
             Log("Node shutdown initiated");
 
@@ -216,7 +217,7 @@ namespace Harmony
 
             Log($"Handing key range {start.ToUsefulString(true)}:{end.ToUsefulString(true)} off to node {target.ID.ToUsefulString(true)}");
 
-            foreach (var piece in LocalDataStore)
+            foreach (var piece in LocalDataStore.ToList())
             {
                 if (piece.ID.IsNotIn(start, end))
                     continue;
