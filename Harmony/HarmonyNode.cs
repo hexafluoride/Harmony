@@ -114,6 +114,11 @@ namespace Harmony
 
                 successor.ReleaseLock(successor_lock);
             }
+            else
+            {
+
+                Log($"Unable to find any peers. Cannot perform key handoff. {LocalDataStore.Pieces.Count} pieces lost.");
+            }
 
             Stop();
         }
