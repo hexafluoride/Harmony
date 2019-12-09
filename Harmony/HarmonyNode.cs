@@ -86,38 +86,44 @@ namespace Harmony
 
             Log("Node shutdown initiated");
 
-            var next_spot = (new BigInteger(ID, true) + 1).ToPaddedArray(ID.Length);
-            var successor_id = FindSuccessor(next_spot) ?? Successor;
-            
-            // connect to successor
-            var uncasted_successor = Network[successor_id];
-            Lock successor_lock = null;
-
-            while ((uncasted_successor == null || !(uncasted_successor is HarmonyRemoteNode)) || 
-                (successor_lock = ((HarmonyRemoteNode)uncasted_successor).AcquireLock()) == null)
+            try
             {
-                successor_id = FindSuccessor(successor_id); // keep going around the Chord circle
+                var next_spot = (new BigInteger(ID, true) + 1).ToPaddedArray(ID.Length);
+                var successor_id = FindSuccessor(next_spot) ?? Successor;
+            
+                // connect to successor
+                var uncasted_successor = Network[successor_id];
+                Lock successor_lock = null;
 
-                if (successor_id.SequenceEqual(ID)) // we've looped around and reached ourselves
+                while ((uncasted_successor == null || !(uncasted_successor is HarmonyRemoteNode)) || 
+                    (successor_lock = ((HarmonyRemoteNode)uncasted_successor).AcquireLock()) == null)
                 {
-                    Log($"Looped around the Chord circle, unable to find any peers. Cannot perform key handoff. {LocalDataStore.Pieces.Count} pieces lost.");
-                    break;
+                    successor_id = FindSuccessor(successor_id); // keep going around the Chord circle
+
+                    if (successor_id.SequenceEqual(ID)) // we've looped around and reached ourselves
+                    {
+                        Log($"handoff-result: Looped around the Chord circle, unable to find any peers. Cannot perform key handoff. {LocalDataStore.Pieces.Count} pieces lost.");
+                        break;
+                    }
+                }
+
+                if (uncasted_successor != null && uncasted_successor is HarmonyRemoteNode && successor_lock != null)
+                {
+                    var successor = uncasted_successor as HarmonyRemoteNode;
+                    var handed_off = HandoffRange(successor).Count();
+
+                    Log($"handoff-result: Handed off {handed_off} pieces out of {LocalDataStore.Pieces.Count} (missed {LocalDataStore.Pieces.Count - handed_off})");
+
+                    successor.ReleaseLock(successor_lock);
+                }
+                else
+                {
+                    Log($"handoff-result: Unable to find any peers. Cannot perform key handoff. {LocalDataStore.Pieces.Count} pieces lost.");
                 }
             }
-
-            if (uncasted_successor != null && uncasted_successor is HarmonyRemoteNode && successor_lock != null)
+            catch (Exception ex)
             {
-                var successor = uncasted_successor as HarmonyRemoteNode;
-                var handed_off = HandoffRange(successor).Count();
-
-                Log($"Handed off {handed_off} pieces out of {LocalDataStore.Pieces.Count} (missed {LocalDataStore.Pieces.Count - handed_off})");
-
-                successor.ReleaseLock(successor_lock);
-            }
-            else
-            {
-
-                Log($"Unable to find any peers. Cannot perform key handoff. {LocalDataStore.Pieces.Count} pieces lost.");
+                Log($"handoff-result: {ex.GetType()} thrown: {ex.Message}");
             }
 
             Stop();
