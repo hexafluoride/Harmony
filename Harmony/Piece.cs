@@ -29,6 +29,9 @@ namespace Harmony
         [IgnoreMember]
         public byte[] Source { get; set; }
 
+        [IgnoreMember]
+        public bool MarkedForRedistribution { get; set; }
+
         public Piece() { }
 
         internal Piece(byte[] data, byte[] id, uint rounds)

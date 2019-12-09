@@ -56,7 +56,7 @@ namespace Harmony
 
                     Log($"piece storage request from {ID.ToUsefulString(true)} (piece_id={request.ID.ToUsefulString(true)}, d={request.RedundancyIndex}) PASSED verification");
 
-                    SelfNode.LocalDataStore.Store(new Piece(request.Data, request.RedundancyIndex) { Source = ID });
+                    SelfNode.LocalDataStore.Store(new Piece(request.Data, request.RedundancyIndex) { Source = ID, MarkedForRedistribution = request.HandoffRequest });
                     Reply(e.RequestID, new PieceStorageResponse(true, iterated_hash));
                 }
                 catch (Exception ex)

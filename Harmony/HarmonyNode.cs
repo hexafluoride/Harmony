@@ -112,27 +112,14 @@ namespace Harmony
             
                 // connect to successor
                 var uncasted_successor = Network[successor_id];
-                Lock successor_lock = null;
+                Lock successor_lock = ((HarmonyRemoteNode)uncasted_successor)?.AcquireLock();
 
-                while ((uncasted_successor == null || !(uncasted_successor is HarmonyRemoteNode)) || 
+                if ((uncasted_successor == null || !(uncasted_successor is HarmonyRemoteNode)) || 
                     ((successor_lock = ((HarmonyRemoteNode)uncasted_successor)?.AcquireLock()) == null) || (successor_lock?.ID?.Length == 0))
                 {
-                    var proposed_successor_id = FindSuccessor(successor_id); // keep going around the Chord circle
-
-                    if (proposed_successor_id == null)
-                    {
-                        Log($"handoff-result: Stumbled upon node whose successor cannot be resolved while looping around the Chord circle. Cannot perform key handoff. {LocalDataStore.Pieces.Count} pieces lost.");
-                        break;
-                    }
-
-                    if (proposed_successor_id.SequenceEqual(ID)) // we've looped around and reached ourselves
-                    {
-                        Log($"handoff-result: Looped around the Chord circle, unable to find any peers. Cannot perform key handoff. {LocalDataStore.Pieces.Count} pieces lost.");
-                        break;
-                    }
-
-                    successor_id = proposed_successor_id;
-                    uncasted_successor = Network[successor_id];
+                    uncasted_successor = Network.Nodes.Values.ToList()
+                        .OfType<HarmonyRemoteNode>()
+                        .FirstOrDefault(n => n.Ping() && (successor_lock = n.AcquireLock())?.ID?.Length != 0);
                 }
 
                 if (uncasted_successor != null && uncasted_successor is HarmonyRemoteNode && successor_lock != null && successor_lock.ID.Length != 0)
@@ -341,6 +328,49 @@ namespace Harmony
                 {
                     Stabilize();
                     FixFingers();
+
+                    if (Stable && LocalDataStore.Any(p => p != null && p.MarkedForRedistribution))
+                    {
+                        try
+                        {
+                            var pieces_to_redistrib = LocalDataStore.Where(p => p != null && p.MarkedForRedistribution).ToList();
+
+                            Log($"stabilizer-redistributor: {pieces_to_redistrib.Count} pieces marked for redistribution in local data store.");
+
+                            var piece = pieces_to_redistrib.ShuffleIterator(Random).First();
+                            var successor = FindSuccessor(piece.ID);
+
+                            Log($"stabilizer-redistributor: picked piece {piece.ID.ToUsefulString(true)}");
+
+                            if (successor != null || successor.Length != 0 || !successor.SequenceEqual(ID) ||
+                                Network[successor] != null || Network[successor].Ping())
+                            {
+                                Log($"stabilizer-redistributor: found real successor {successor.ToUsefulString(true)} for piece {piece.ID.ToUsefulString(true)}");
+
+                                var peer = Network[successor] as HarmonyRemoteNode;
+                                var resp = peer.Store(piece);
+
+                                if (resp != null && resp.Key?.SequenceEqual(piece.ID) == true)
+                                {
+                                    Log($"stabilizer-redistributor: successfully redistributed piece {piece.ID.ToUsefulString(true)}");
+                                    piece.MarkedForRedistribution = false;
+                                }
+                                else
+                                {
+                                    Log($"stabilizer-redistributor: failed to redistribute piece {piece.ID.ToUsefulString(true)}");
+                                }
+                            }
+                            else if (successor?.SequenceEqual(ID) == true)
+                            {
+                                Log($"stabilizer-redistributor: piece {piece.ID.ToUsefulString(true)} already belongs to us, unmarking for redistribution");
+                                piece.MarkedForRedistribution = false;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log($"stabilizer-redistributor: {ex.GetType()} thrown: {ex.Message}");
+                        }
+                    }
                 }
 
                 Thread.Sleep(StabilizeRate);
