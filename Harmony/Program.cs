@@ -238,6 +238,8 @@ namespace Harmony
             {
                 Log.Info("Shutting down...");
                 Node.Shutdown();
+
+                Environment.Exit(0);
             };
 
             // keep checking stability and asking for nodes from tracker if configured

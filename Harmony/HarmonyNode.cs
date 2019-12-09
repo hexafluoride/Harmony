@@ -156,6 +156,8 @@ namespace Harmony
 
             Stop();
             ShutdownSemaphore.Set();
+
+            Log($"node-shutdown: Shutdown complete.");
         }
 
         public void Stop()
