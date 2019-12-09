@@ -23,6 +23,7 @@ namespace Harmony
         public bool Running { get; set; }
 
         public bool Locked => ActiveLocks.Any(l => !l.Value.Expired);
+        public bool AcceptingPieces { get; set; }
 
         private ManualResetEvent RunningSemaphore = new ManualResetEvent(false);
         private Dictionary<byte[], Lock> ActiveLocks = new Dictionary<byte[], Lock>(new StructuralEqualityComparer());
@@ -47,6 +48,7 @@ namespace Harmony
             ID = JoinBlock.GenerateID();
 
             LocalDataStore = LocalDataStore ?? new DataStore();
+            AcceptingPieces = true;
 
             Listener = new TcpListener(listen_addr, port);
             Network = new HarmonyNetwork(this);
@@ -86,37 +88,31 @@ namespace Harmony
 
             var next_spot = (new BigInteger(ID, true) + 1).ToPaddedArray(ID.Length);
             var successor_id = FindSuccessor(next_spot) ?? Successor;
+            
+            // connect to successor
+            var uncasted_successor = Network[successor_id];
+            Lock successor_lock = null;
 
-            if (successor_id == null || successor_id.Length == 0 || successor_id.SequenceEqual(ID))
+            while ((uncasted_successor == null || !(uncasted_successor is HarmonyRemoteNode)) || 
+                (successor_lock = ((HarmonyRemoteNode)uncasted_successor).AcquireLock()) == null)
             {
-                // can't perform key handoff
+                successor_id = FindSuccessor(successor_id); // keep going around the Chord circle
+
+                if (successor_id.SequenceEqual(ID)) // we've looped around and reached ourselves
+                {
+                    Log($"Looped around the Chord circle, unable to find any peers. Cannot perform key handoff. {LocalDataStore.Pieces.Count} pieces lost.");
+                    break;
+                }
             }
-            else
+
+            if (uncasted_successor != null && uncasted_successor is HarmonyRemoteNode && successor_lock != null)
             {
-                // connect to successor
-                var uncasted_successor = Network[successor_id];
-                Lock successor_lock = null;
+                var successor = uncasted_successor as HarmonyRemoteNode;
+                var handed_off = HandoffRange(successor).Count();
 
-                while ((uncasted_successor == null || !(uncasted_successor is HarmonyRemoteNode)) || 
-                    (successor_lock = ((HarmonyRemoteNode)uncasted_successor).AcquireLock()) == null)
-                {
-                    successor_id = FindSuccessor(successor_id); // keep going around the Chord circle
+                Log($"Handed off {handed_off} pieces out of {LocalDataStore.Pieces.Count} (missed {LocalDataStore.Pieces.Count - handed_off})");
 
-                    if (successor_id.SequenceEqual(ID)) // we've looped around and reached ourselves
-                    {
-                        break;
-                    }
-                }
-
-                if (uncasted_successor != null && uncasted_successor is HarmonyRemoteNode && successor_lock != null)
-                {
-                    var successor = uncasted_successor as HarmonyRemoteNode;
-                    var handed_off = HandoffRange(successor).Count();
-
-                    Log($"Handed off {handed_off} pieces out of {LocalDataStore.Pieces.Count} (missed {LocalDataStore.Pieces.Count - handed_off})");
-
-                    successor.ReleaseLock(successor_lock);
-                }
+                successor.ReleaseLock(successor_lock);
             }
 
             Stop();

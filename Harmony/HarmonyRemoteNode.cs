@@ -38,6 +38,13 @@ namespace Harmony
                     var request = LZ4MessagePackSerializer.Deserialize<PieceStorageRequest>(e.Parameter);
                     Log($"received piece storage request from {ID.ToUsefulString(true)} (piece_id={request.ID.ToUsefulString(true)}, d={request.RedundancyIndex})");
 
+                    if (!SelfNode.AcceptingPieces)
+                    {
+                        Log($"denying piece storage request from {ID.ToUsefulString(true)} (piece_id={request.ID.ToUsefulString(true)}, d={request.RedundancyIndex}), AcceptingPieces={SelfNode.AcceptingPieces}");
+                        Reply(e.RequestID, new PieceStorageResponse(false));
+                        return;
+                    }
+
                     var iterated_hash = HashSingleton.ComputeRounds(request.Data, request.RedundancyIndex);
 
                     if (!HashSingleton.VerifyRounds(request.Data, request.ID, (int)request.RedundancyIndex))
