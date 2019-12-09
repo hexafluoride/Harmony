@@ -99,7 +99,7 @@ namespace Harmony
                 Lock successor_lock = null;
 
                 while ((uncasted_successor == null || !(uncasted_successor is HarmonyRemoteNode)) || 
-                    (successor_lock = ((HarmonyRemoteNode)uncasted_successor)?.AcquireLock()) == null)
+                    ((successor_lock = ((HarmonyRemoteNode)uncasted_successor)?.AcquireLock()) == null) || (successor_lock?.ID?.Length == 0))
                 {
                     var proposed_successor_id = FindSuccessor(successor_id); // keep going around the Chord circle
 
@@ -176,7 +176,7 @@ namespace Harmony
         internal Lock AcquireLock(byte[] source)
         {
             if (!CanAcquireLock(source))
-                return null;
+                return new Lock() { ID = new byte[0] };
 
             var @lock = new Lock(source);
             ActiveLocks[@lock.ID] = @lock;
