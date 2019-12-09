@@ -195,8 +195,12 @@ namespace Harmony
         internal Lock AcquireLock(byte[] source)
         {
             if (!CanAcquireLock(source))
+            {
+                Log($"acquire-lock: Refusing lock request from {source.ToUsefulString(true)}");
                 return new Lock() { ID = new byte[0] };
+            }
 
+            Log($"acquire-lock: Accepted lock request from {source.ToUsefulString(true)}");
             var @lock = new Lock(source);
             ActiveLocks[@lock.ID] = @lock;
             return @lock;
@@ -254,7 +258,7 @@ namespace Harmony
 
                 var response = target.Store(piece, true);
 
-                if (response != null && piece.ID.SequenceEqual(response.Key))
+                if (response != null && piece.ID.SequenceEqual(response?.Key))
                 {
                     Log($"handoff-range: Successfully handed off {piece.ID.ToUsefulString()}");
                     yield return piece;
