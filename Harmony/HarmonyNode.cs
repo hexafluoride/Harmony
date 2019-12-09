@@ -75,20 +75,22 @@ namespace Harmony
 
         public void Shutdown()
         {
+            Log("node-shutdown: Node shutdown initiated");
             AcceptingLocks = false;
 
             if (Locked)
             {
-                Log($"Waiting for {ActiveLocks.Count} locks...");
+                Log($"shutdown-lock-resolve: Waiting for {ActiveLocks.Count} locks...");
                 WaitLocks();
-                Log($"Unlocked.");
+                Log($"shutdown-lock-resolve: Unlocked.");
             }
-            AcceptingPieces = false;
 
-            Log("Node shutdown initiated");
+            AcceptingPieces = false;
 
             try
             {
+                Log($"handoff-start: {LocalDataStore.Pieces.Count} pieces to hand off");
+
                 var next_spot = (new BigInteger(ID, true) + 1).ToPaddedArray(ID.Length);
                 var successor_id = FindSuccessor(next_spot) ?? Successor;
             
@@ -195,18 +197,18 @@ namespace Harmony
 
         private IEnumerable<Piece> HandoffRange(byte[] target, byte[] start = default, byte[] end = default)
         {
-            Log($"Asked to handoff key range {start.ToUsefulString(true)}:{end.ToUsefulString(true)} to node {target.ToUsefulString(true)}");
+            Log($"handoff-range: Asked to handoff key range {start.ToUsefulString(true)}:{end.ToUsefulString(true)} to node {target.ToUsefulString(true)}");
             var target_peer = Network[target];
 
             if (target_peer == null)
             {
-                Log($"Can't handoff key range {start.ToUsefulString(true)}:{end.ToUsefulString(true)} to null node {target.ToUsefulString(true)}");
+                Log($"handoff-range: Can't handoff key range {start.ToUsefulString(true)}:{end.ToUsefulString(true)} to null node {target.ToUsefulString(true)}");
                 return null;
             }
 
             if (!(target_peer is HarmonyRemoteNode))
             {
-                Log($"Can't handoff key range {start.ToUsefulString(true)}:{end.ToUsefulString(true)} to {target.ToUsefulString(true)} of node type {target_peer.GetType()} (self={target.SequenceEqual(ID)})");
+                Log($"handoff-range: Can't handoff key range {start.ToUsefulString(true)}:{end.ToUsefulString(true)} to {target.ToUsefulString(true)} of node type {target_peer.GetType()} (self={target.SequenceEqual(ID)})");
                 return null;
             }
 
@@ -220,11 +222,11 @@ namespace Harmony
 
             if (target == null)
             {
-                Log($"Can't handoff key range {start.ToUsefulString(true)}:{end.ToUsefulString(true)} to null node (probably ourselves)");
+                Log($"handoff-range: Can't handoff key range {start.ToUsefulString(true)}:{end.ToUsefulString(true)} to null node (probably ourselves)");
                 yield break;
             }
 
-            Log($"Handing key range {start.ToUsefulString(true)}:{end.ToUsefulString(true)} off to node {target.ID.ToUsefulString(true)}");
+            Log($"handoff-range: Handing key range {start.ToUsefulString(true)}:{end.ToUsefulString(true)} off to node {target.ID.ToUsefulString(true)}");
 
             foreach (var piece in LocalDataStore.ToList())
             {
@@ -235,12 +237,12 @@ namespace Harmony
 
                 if (response != null && piece.ID.SequenceEqual(response.Key))
                 {
-                    Log($"Successfully handed off {piece.ID.ToUsefulString()}");
+                    Log($"handoff-range: Successfully handed off {piece.ID.ToUsefulString()}");
                     yield return piece;
                 }
                 else
                 {
-                    Log($"Failed to handoff {piece.ID.ToUsefulString()}");
+                    Log($"handoff-range: Failed to handoff {piece.ID.ToUsefulString()}");
                 }
             }
         }
@@ -257,18 +259,18 @@ namespace Harmony
                 {
                     incoming_socket = Listener.AcceptSocket();
 
-                    Log($"Incoming connection on {Listener.LocalEndpoint} from {incoming_socket.RemoteEndPoint}");
+                    Log($"listener-loop: Incoming connection on {Listener.LocalEndpoint} from {incoming_socket.RemoteEndPoint}");
                     var remote_node = new HarmonyRemoteNode(this, incoming_socket);
 
                     remote_node.DisconnectEvent += HandleNodeDisconnection;
                     remote_node.Start();
-                    Log($"Connected to {remote_node.ID.ToUsefulString()} on {incoming_socket.RemoteEndPoint}");
+                    Log($"listener-loop: Connected to {remote_node.ID.ToUsefulString()} on {incoming_socket.RemoteEndPoint}");
 
                     Network.Add(remote_node);
                 }
                 catch (Exception ex)
                 {
-                    Log($"{ex.GetType()} occurred while trying to accept connection: {ex.Message}");
+                    Log($"listener-loop: {ex.GetType()} occurred while trying to accept connection: {ex.Message}");
 
                     try
                     {
@@ -357,7 +359,7 @@ namespace Harmony
                 if (Network.Nodes.OfType<RemoteNode>().Any(n => n.ID.SequenceEqual(ID)))
                     return Network.Nodes[id] as RemoteNode;
 
-                Log($"Connecting to {ep}...");
+                Log($"create-remote-node: Connecting to {ep}...");
 
                 var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
                 socket.Connect(ep);
@@ -406,7 +408,7 @@ namespace Harmony
 
                     return (LocalDataStore[iterated_hash] = piece);
                 }
-                catch (Exception ex) { Log($"Exception while retrieving piece: {ex}"); }
+                catch (Exception ex) { Log($"retrieve-piece: Exception while retrieving piece: {ex}"); }
             }
 
             // we failed
