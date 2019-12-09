@@ -97,15 +97,24 @@ namespace Harmony
                 Lock successor_lock = null;
 
                 while ((uncasted_successor == null || !(uncasted_successor is HarmonyRemoteNode)) || 
-                    (successor_lock = ((HarmonyRemoteNode)uncasted_successor).AcquireLock()) == null)
+                    (successor_lock = ((HarmonyRemoteNode)uncasted_successor)?.AcquireLock()) == null)
                 {
-                    successor_id = FindSuccessor(successor_id); // keep going around the Chord circle
+                    var proposed_successor_id = FindSuccessor(successor_id); // keep going around the Chord circle
 
-                    if (successor_id.SequenceEqual(ID)) // we've looped around and reached ourselves
+                    if (proposed_successor_id == null)
+                    {
+                        Log($"handoff-result: Stumbled upon node whose successor cannot be resolved while looping around the Chord circle. Cannot perform key handoff. {LocalDataStore.Pieces.Count} pieces lost.");
+                        break;
+                    }
+
+                    if (proposed_successor_id.SequenceEqual(ID)) // we've looped around and reached ourselves
                     {
                         Log($"handoff-result: Looped around the Chord circle, unable to find any peers. Cannot perform key handoff. {LocalDataStore.Pieces.Count} pieces lost.");
                         break;
                     }
+
+                    successor_id = proposed_successor_id;
+                    uncasted_successor = Network[successor_id];
                 }
 
                 if (uncasted_successor != null && uncasted_successor is HarmonyRemoteNode && successor_lock != null)
