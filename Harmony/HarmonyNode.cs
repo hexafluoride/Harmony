@@ -326,8 +326,8 @@ namespace Harmony
             {
                 if (Network.PeerCount > 0)
                 {
-                    Stabilize();
-                    FixFingers();
+                    try { Stabilize(); } catch (Exception ex) { Log($"stabilize: {ex.GetType()} thrown: {ex.Message}"); }
+                    try { FixFingers(); } catch (Exception ex) { Log($"fix-fingers: {ex.GetType()} thrown: {ex.Message}"); }
 
                     if (Stable && LocalDataStore.Any(p => p != null && p.MarkedForRedistribution))
                     {
