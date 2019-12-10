@@ -342,8 +342,8 @@ namespace Harmony
 
                             Log($"stabilizer-redistributor: picked piece {piece.ID.ToUsefulString(true)}");
 
-                            if (successor != null || successor.Length != 0 || !successor.SequenceEqual(ID) ||
-                                Network[successor] != null || Network[successor].Ping())
+                            if (successor != null && successor.Length != 0 && !successor.SequenceEqual(ID) &&
+                                Network[successor] != null && Network[successor].Ping())
                             {
                                 Log($"stabilizer-redistributor: found real successor {successor.ToUsefulString(true)} for piece {piece.ID.ToUsefulString(true)}");
 
