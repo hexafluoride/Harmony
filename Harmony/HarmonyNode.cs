@@ -19,8 +19,11 @@ namespace Harmony
 
         public DataStore LocalDataStore { get; set; }
 
-        public int StabilizeRate { get; set; }
         public bool Running { get; set; }
+        public bool Stable => Network.IsReachable(Successor) && Network.IsReachable(Predecessor);
+
+        public bool PrintMetricOutput { get; set; }
+        public int StabilizeRate { get; set; }
 
         public bool Locked => ActiveLocks.Any(l => !l.Value.Expired);
         public bool AcceptingPieces { get; set; }
@@ -30,8 +33,6 @@ namespace Harmony
         private ManualResetEvent RunningSemaphore = new ManualResetEvent(false);
         private Dictionary<byte[], Lock> ActiveLocks = new Dictionary<byte[], Lock>(new StructuralEqualityComparer());
         private bool AcceptingLocks = true;
-
-        public bool Stable => Network.IsReachable(Successor) && Network.IsReachable(Predecessor);
 
         public HarmonyNode(IPEndPoint listen_ep) :
             this(listen_ep.Address, listen_ep.Port)
@@ -318,6 +319,89 @@ namespace Harmony
             }
         }
 
+        private void RedistributePieces()
+        {
+            if (Stable && LocalDataStore.Any(p => p != null && p.MarkedForRedistribution))
+            {
+                try
+                {
+                    var pieces_to_redistrib = LocalDataStore.Where(p => p != null && p.MarkedForRedistribution).ToList();
+
+                    Log($"stabilizer-redistributor: {pieces_to_redistrib.Count} pieces out of {LocalDataStore.Pieces.Count} marked for redistribution in local data store.");
+
+                    var piece = pieces_to_redistrib.ShuffleIterator(Random).First();
+                    var successor = FindSuccessor(piece.ID);
+
+                    Log($"stabilizer-redistributor: picked piece {piece.ID.ToUsefulString(true)}");
+
+                    if (successor != null && successor.Length != 0 && !successor.SequenceEqual(ID) &&
+                        Network[successor] != null && Network[successor].Ping())
+                    {
+                        Log($"stabilizer-redistributor: found real successor {successor.ToUsefulString(true)} for piece {piece.ID.ToUsefulString(true)}");
+
+                        var peer = Network[successor] as HarmonyRemoteNode;
+                        var resp = peer.Store(piece);
+
+                        if (resp != null && resp.Key?.SequenceEqual(piece.ID) == true)
+                        {
+                            Log($"stabilizer-redistributor: successfully redistributed piece {piece.ID.ToUsefulString(true)}");
+                            piece.MarkedForRedistribution = false;
+                            piece.OurResponsibility = false;
+                        }
+                        else
+                        {
+                            Log($"stabilizer-redistributor: failed to redistribute piece {piece.ID.ToUsefulString(true)}");
+                        }
+                    }
+                    else if (successor?.SequenceEqual(ID) == true)
+                    {
+                        Log($"stabilizer-redistributor: piece {piece.ID.ToUsefulString(true)} already belongs to us, unmarking for redistribution");
+                        piece.MarkedForRedistribution = false;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log($"stabilizer-redistributor: {ex.GetType()} thrown: {ex.Message}");
+                }
+            }
+        }
+
+        private void PurgePieces()
+        {
+            if (Stable && LocalDataStore.Any(p => p != null && !p.MarkedForRedistribution && !p.OurResponsibility))
+            {
+                try
+                {
+                    var pieces_to_purge = LocalDataStore.Where(p => p != null && !p.MarkedForRedistribution && !p.OurResponsibility).ToList();
+
+                    Log($"stabilizer-purge: {pieces_to_purge.Count} pieces out of {LocalDataStore.Pieces.Count} marked for purge in local data store.");
+
+                    foreach (var piece in pieces_to_purge)
+                        LocalDataStore.Drop(piece.ID);
+
+                    Log($"stabilizer-purge: {pieces_to_purge.Count} pieces purged, {LocalDataStore.Pieces.Count} pieces remain");
+                }
+                catch (Exception ex)
+                {
+                    Log($"stabilizer-purge: {ex.GetType()} thrown: {ex.Message}");
+                }
+            }
+        }
+
+        private void PrintMetrics()
+        {
+            if (PrintMetricOutput)
+            {
+                Log($"metrics: " +
+                    $"stable: {Stable}, " +
+                    $"peers: {Network.PeerCount}, " +
+                    $"pieces: {LocalDataStore.Pieces.Count}, " +
+                    $"pieces-to-redistribute: {LocalDataStore.Count(p => p != null && p.MarkedForRedistribution)}, " +
+                    $"uptime: {(long)(DateTime.Now - HarmonyModule.Start).TotalMilliseconds}, " +
+                    $"messages: {RemoteNode.SentMessages + RemoteNode.ReceivedMessages}");
+            }
+        }
+
         private void StabilizerLoop()
         {
             while (!RunningSemaphore.WaitOne()) ; // wait until we start running
@@ -329,48 +413,8 @@ namespace Harmony
                     try { Stabilize(); } catch (Exception ex) { Log($"stabilize: {ex.GetType()} thrown: {ex.Message}"); }
                     try { FixFingers(); } catch (Exception ex) { Log($"fix-fingers: {ex.GetType()} thrown: {ex.Message}"); }
 
-                    if (Stable && LocalDataStore.Any(p => p != null && p.MarkedForRedistribution))
-                    {
-                        try
-                        {
-                            var pieces_to_redistrib = LocalDataStore.Where(p => p != null && p.MarkedForRedistribution).ToList();
-
-                            Log($"stabilizer-redistributor: {pieces_to_redistrib.Count} pieces marked for redistribution in local data store.");
-
-                            var piece = pieces_to_redistrib.ShuffleIterator(Random).First();
-                            var successor = FindSuccessor(piece.ID);
-
-                            Log($"stabilizer-redistributor: picked piece {piece.ID.ToUsefulString(true)}");
-
-                            if (successor != null && successor.Length != 0 && !successor.SequenceEqual(ID) &&
-                                Network[successor] != null && Network[successor].Ping())
-                            {
-                                Log($"stabilizer-redistributor: found real successor {successor.ToUsefulString(true)} for piece {piece.ID.ToUsefulString(true)}");
-
-                                var peer = Network[successor] as HarmonyRemoteNode;
-                                var resp = peer.Store(piece);
-
-                                if (resp != null && resp.Key?.SequenceEqual(piece.ID) == true)
-                                {
-                                    Log($"stabilizer-redistributor: successfully redistributed piece {piece.ID.ToUsefulString(true)}");
-                                    piece.MarkedForRedistribution = false;
-                                }
-                                else
-                                {
-                                    Log($"stabilizer-redistributor: failed to redistribute piece {piece.ID.ToUsefulString(true)}");
-                                }
-                            }
-                            else if (successor?.SequenceEqual(ID) == true)
-                            {
-                                Log($"stabilizer-redistributor: piece {piece.ID.ToUsefulString(true)} already belongs to us, unmarking for redistribution");
-                                piece.MarkedForRedistribution = false;
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Log($"stabilizer-redistributor: {ex.GetType()} thrown: {ex.Message}");
-                        }
-                    }
+                    RedistributePieces();
+                    PrintMetrics();
                 }
 
                 Thread.Sleep(StabilizeRate);

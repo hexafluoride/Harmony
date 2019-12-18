@@ -30,6 +30,7 @@ namespace Harmony
         static IPEndPoint ListenEP { get; set; }
         static Uri Tracker { get; set; }
         static Random Random = new Random();
+        static bool DaemonMode { get; set; }
 
         static void Main(string[] args)
         {
@@ -58,6 +59,7 @@ namespace Harmony
             var tracker_arg = "";
             bool test_mode = false;
             bool daemon_mode = false;
+            bool metrics = false;
             var tracker_interval = 60;
             var max_peers = 8;
 
@@ -73,16 +75,18 @@ namespace Harmony
                     "If only an address is specified, treats the argument as <addr>:<random_port>", l => api_listen_arg = l },
                 {"test", "Starts an interactive test session after boot.", t => test_mode = true },
                 {"c|cache=", "Instructs Harmony to read cached pieces from the given cache directory.", c => data_store.CachePath = c },
-                {"daemon", "Replaces stdin reads with indefinite waits, useful for when running as a daemon", d => daemon_mode = true },
+                {"daemon", "Replaces stdin reads with indefinite waits and never updates title display, useful for when running as a daemon", d => daemon_mode = true },
                 {"t|tracker=", "Announces and asks for peers from a tracker Zgibe server.", t => tracker_arg = t },
                 {"tracker-interval=", "Sets the announcement and node stability check interval in seconds.", i => tracker_interval = int.Parse(i) },
                 {"n|name=", "Sets the node name, announced to other peers and added to the response headers of the HTTP API.", n => Name = n },
                 {"m|max-peers=", "The maximum number of peers to connect to. Recommended to be set above 4.", m => max_peers = int.Parse(m) },
+                {"metrics", "Prints node metrics every stabilization cycle.", m => metrics = true },
                 {"?|h|help", "Shows this text.", h => 
                 {
                     Console.WriteLine("usage: harmony [--listen [<IP>:]<port>] [--api [<IP>:]port] [--bootstrap ...]\n" +
                                       "               [--tracker <URI>] [--name <name>] [--tracker-interval <seconds>]\n" +
-                                      "               [--cache <path>] [--max-peers <N>] [--test] [--help] [--daemon]\n");
+                                      "               [--cache <path>] [--max-peers <N>] [--test] [--help] [--daemon]\n" +
+                                      "               [--metrics]\n");
                     Console.WriteLine();
                     
                     set.WriteOptionDescriptions(Console.Out);
@@ -152,6 +156,8 @@ namespace Harmony
             ListenEP = listen_ep;
             Log.Info($"Listening for Harmony connections on {listen_ep}");
 
+            DaemonMode = daemon_mode;
+
             // start HTTP server if needed
             if (api_listen_ep.Port != 0)
             {
@@ -175,6 +181,7 @@ namespace Harmony
             Node = new HarmonyNode(listen_ep);
             Node.Network.MaximumPeers = max_peers;
             Node.LocalDataStore = data_store;
+            Node.PrintMetricOutput = metrics;
 
             HarmonyModule.Node = Node; // Nancy module for the HTTP API
 
@@ -183,9 +190,12 @@ namespace Harmony
                 Announcer.AnnounceTo(Tracker, Node);
 
             // configure title display
-            Node.PredecessorChanged += (e, s) => { UpdateDisplay(); };
-            Node.SuccessorChanged += (e, s) => { UpdateDisplay(); };
-            Task.Run(() => { while (true) { UpdateDisplay(); Thread.Sleep(1000); } }).ConfigureAwait(false);
+            if (!DaemonMode)
+            {
+                Node.PredecessorChanged += (e, s) => { UpdateDisplay(); };
+                Node.SuccessorChanged += (e, s) => { UpdateDisplay(); };
+                Task.Run(() => { while (true) { UpdateDisplay(); Thread.Sleep(1000); } }).ConfigureAwait(false);
+            }
 
             // start node
             Node.Start();
@@ -355,7 +365,7 @@ namespace Harmony
                 }
             }
 
-            if (daemon_mode)
+            if (DaemonMode)
                 Thread.Sleep(-1);
             else
                 Console.ReadLine();
@@ -375,6 +385,9 @@ namespace Harmony
 
         private static void UpdateDisplay()
         {
+            if (DaemonMode)
+                return;
+
             lock (stat_sw)
             {
                 try

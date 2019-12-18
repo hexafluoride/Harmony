@@ -32,6 +32,9 @@ namespace Harmony
         [IgnoreMember]
         public bool MarkedForRedistribution { get; set; }
 
+        [IgnoreMember]
+        public bool OurResponsibility { get; set; }
+
         public Piece() { }
 
         internal Piece(byte[] data, byte[] id, uint rounds)
@@ -40,6 +43,7 @@ namespace Harmony
             ID = id;
             RedundancyIndex = rounds;
             OriginalID = HashSingleton.Compute(Data);
+            OurResponsibility = true;
         }
 
         public Piece(byte[] data, int rounds) :
