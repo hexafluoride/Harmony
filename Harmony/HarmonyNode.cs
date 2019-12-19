@@ -414,6 +414,7 @@ namespace Harmony
                     try { FixFingers(); } catch (Exception ex) { Log($"fix-fingers: {ex.GetType()} thrown: {ex.Message}"); }
 
                     RedistributePieces();
+                    PurgePieces();
                     PrintMetrics();
                 }
 
