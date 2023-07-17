@@ -10,7 +10,7 @@ Distributed storage system based on Chordette, an implementation of the Chord DH
 
 ## Current state of Harmony
 
-Harmony is not ready to be tested or used in production yet.
+See the [help text](https://github.com/hexafluoride/Harmony/blob/master/Harmony/Program.cs#L69) for a list of currently implemented features.
 
 ## License
 
